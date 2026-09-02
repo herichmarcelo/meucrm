@@ -40,6 +40,7 @@ const ALLOWED = [
   /^lib\/channels\//,
   // O transporte que o adapter embrulha; some quando a Fase 3 o absorver.
   /^lib\/waha\//,
+  /^lib\/gowa\//,
   // Saída de `supabase gen types`: os nomes são COLUNAS. Editar à mão é o defeito.
   /^lib\/database\.types\.ts$/,
 ];
@@ -77,6 +78,7 @@ const KNOWN_DEBT: { reason: string; files: string[] }[] = [
       "app/api/v1/messages/[id]/media/route.ts",
       "app/api/v1/onboarding/whatsapp/qr/route.ts",
       "app/api/v1/onboarding/whatsapp/session/route.ts",
+      "app/api/v1/webhooks/gowa/[token]/route.ts",
       "app/api/v1/webhooks/waha/[token]/route.ts",
       "app/api/v1/webhooks/waha/route.ts",
       // (#118) Lê `process.env.WAHA_API_BASE_URL`/`WAHA_API_KEY` só para
@@ -187,7 +189,7 @@ const DEBT = new Set(KNOWN_DEBT.flatMap((g) => g.files));
 
 function walk(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
-    const p = join(dir, e.name);
+    const p = join(dir, e.name).replace(/\\/g, "/");
     if (e.isDirectory()) return e.name === "node_modules" ? [] : walk(p);
     return /\.tsx?$/.test(e.name) ? [p] : [];
   });

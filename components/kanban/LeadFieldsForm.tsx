@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Textarea } from "@/components/ui/textarea";
 import { useEditLead } from "@/hooks/kanban/useUpdateLead";
 import type { Lead } from "@/lib/types/leads";
@@ -145,10 +146,15 @@ export function LeadFieldsForm({ lead, pipelineId, onSaved, onCancel }: Props) {
           </div>
           <div className="space-y-2">
             <Label htmlFor="expected_close_date">Fechamento previsto</Label>
-            <Input
+            <DatePicker
               id="expected_close_date"
-              type="date"
-              {...form.register("expected_close_date")}
+              value={form.watch("expected_close_date")}
+              onChange={(val) =>
+                form.setValue("expected_close_date", val, {
+                  shouldValidate: true,
+                  shouldDirty: true,
+                })
+              }
             />
           </div>
         </div>

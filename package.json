@@ -124,7 +124,9 @@
       "hono": "^4.12.34",
       "js-yaml": "^4.3.1",
       "brace-expansion@1": "^1.1.18",
-      "path-to-regexp@6": "^6.3.0"
+      "path-to-regexp@6": "^6.3.0",
+      "@emoji-mart/react>react": "$react",
+      "@emoji-mart/react>react-dom": "$react-dom"
     }
   }
 }

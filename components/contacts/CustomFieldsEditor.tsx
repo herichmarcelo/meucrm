@@ -8,6 +8,7 @@
  * field schemas.
  */
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
@@ -97,11 +98,10 @@ export function CustomFieldsEditor({ fields, value, onChange, disabled }: Props)
             return (
               <div key={f.key} className="space-y-2">
                 {labelEl}
-                <Input
+                <DatePicker
                   id={id}
-                  type="date"
                   value={typeof v === "string" ? v : ""}
-                  onChange={(e) => set(f.key, e.target.value)}
+                  onChange={(val) => set(f.key, val || null)}
                   disabled={disabled}
                 />
               </div>

@@ -5,13 +5,9 @@ import { apiClient } from "@/lib/api/client";
 
 export interface ChannelSession {
   id: string;
-  /**
-   * Nome da sessão no transporte. NULL no canal oficial, que não tem sessão a
-   * iniciar, deslogar ou apagar — é o que distingue, na tela, quem depende do
-   * serviço de WhatsApp para ser excluído. O tipo dizia `string` e mentia: um
-   * canal oficial rendia rótulo vazio onde a tela concatenava esse campo.
-   */
+  provider?: string | null;
   waha_session_name: string | null;
+  gowa_device_id?: string | null;
   display_name: string | null;
   phone_number: string | null;
   status: string;
@@ -26,15 +22,17 @@ export interface ChannelSession {
 export type ConnectionHealth = "connected" | "connecting" | "down" | "none" | "unknown";
 
 /**
- * Como um canal se chama na tela. Existe porque nenhum dos três campos é
+ * Como um canal se chama na tela. Existe porque nenhum dos campos é
  * garantido: o canal oficial não tem nome de sessão no transporte, e um canal
  * recém-criado ainda não tem apelido nem número — a cadeia sem o último degrau
  * rendia uma opção em branco no seletor.
  */
 export function channelLabel(
-  c: Pick<ChannelSession, "display_name" | "phone_number" | "waha_session_name">,
+  c: Pick<ChannelSession, "display_name" | "phone_number" | "waha_session_name"> & {
+    gowa_device_id?: string | null;
+  },
 ): string {
-  return c.display_name || c.phone_number || c.waha_session_name || "Número sem nome";
+  return c.display_name || c.phone_number || c.waha_session_name || c.gowa_device_id || "Número sem nome";
 }
 
 /**

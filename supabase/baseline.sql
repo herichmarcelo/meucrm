@@ -9400,22 +9400,9 @@ alter table public.channel_sessions alter column waha_session_name drop not null
 alter table public.channel_sessions
   add column if not exists zernio_account_id text;
 
-alter table public.channel_sessions
-  drop constraint if exists channel_sessions_provider_check;
-
-alter table public.channel_sessions
-  add constraint channel_sessions_provider_check
-  check (provider = any (array['waha'::text, 'meta_cloud'::text, 'zernio'::text]));
-
-alter table public.channel_sessions
-  drop constraint if exists channel_sessions_provider_ref_check;
-
-alter table public.channel_sessions
-  add constraint channel_sessions_provider_ref_check check (
-    (provider = 'waha'       and waha_session_name    is not null) or
-    (provider = 'meta_cloud' and meta_phone_number_id is not null) or
-    (provider = 'zernio'     and zernio_account_id    is not null)
-  );
+-- (constraints channel_sessions_provider_check e channel_sessions_provider_ref_check:
+--  definidas no apêndice final deste arquivo com o vocabulário completo incluindo GOWA — regra
+--  de `tests/unit/baseline-constraint-reconstruida.test.ts`.)
 
 comment on column public.channel_sessions.zernio_account_id is
   'Identificador da conta conectada NO INTERMEDIÁRIO (accountId), não o phone_number_id da Meta. É o que endereça envio e webhook. Espelhado em lib/channels/session-ref.ts.';
@@ -13976,5 +13963,31 @@ alter table public.messages
 create index if not exists messages_reply_to_idx
   on public.messages (reply_to_message_id)
   where reply_to_message_id is not null;
+
+-- ---- canal GOWA (migration 0169) ----
+alter table public.channel_sessions
+  add column if not exists gowa_device_id text;
+
+alter table public.channel_sessions
+  drop constraint if exists channel_sessions_provider_check;
+
+alter table public.channel_sessions
+  add constraint channel_sessions_provider_check
+  check (provider = any (array['waha'::text, 'meta_cloud'::text, 'zernio'::text, 'gowa'::text]));
+
+alter table public.channel_sessions
+  drop constraint if exists channel_sessions_provider_ref_check;
+
+alter table public.channel_sessions
+  add constraint channel_sessions_provider_ref_check check (
+    (provider = 'waha'       and waha_session_name    is not null) or
+    (provider = 'meta_cloud' and meta_phone_number_id is not null) or
+    (provider = 'zernio'     and zernio_account_id    is not null) or
+    (provider = 'gowa'       and gowa_device_id       is not null)
+  );
+
+create unique index if not exists channel_sessions_gowa_device_id_ativo_unique
+  on public.channel_sessions (gowa_device_id)
+  where archived_at is null and gowa_device_id is not null;
 
 notify pgrst, 'reload schema';

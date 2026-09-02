@@ -25,6 +25,7 @@ import { NextResponse } from "next/server";
 import { loadAuthUser, resolveActiveOrg } from "@/lib/auth/server";
 import { ARCHIVED_AT, queryTolerantToMissingArchived } from "@/lib/channels/archived";
 import { createClient } from "@/lib/supabase/server";
+import { getGowaClient } from "@/lib/gowa/client";
 
 export const dynamic = "force-dynamic";
 
@@ -47,30 +48,58 @@ export async function GET(
       .eq("organization_id", activeOrg.orgId)
       .eq("id", id)
       .maybeSingle();
-  // Tolerante à coluna ausente: num clone sem a migration 0106 nada está
-  // arquivado, e exigir a coluna aqui apagaria o QR de quem está pareando agora
-  // — o passo mais frágil da primeira instalação.
+
   const { data: sessionRaw } = await queryTolerantToMissingArchived(
-    () => buscar(`waha_session_name, ${ARCHIVED_AT}`),
-    () => buscar("waha_session_name"),
+    () => buscar(`provider, waha_session_name, gowa_device_id, ${ARCHIVED_AT}`),
+    () => buscar("provider, waha_session_name, gowa_device_id"),
   );
   const session = sessionRaw as {
+    provider?: string;
     waha_session_name: string | null;
+    gowa_device_id?: string | null;
     archived_at?: string | null;
   } | null;
   if (!session) return new NextResponse(null, { status: 404 });
-  // 409, não 404: o canal ESTÁ na organização — foi excluído. O corpo é vazio
-  // porque quem consome isto é um <img>; o cabeçalho é para quem depura.
+
   if (session.archived_at) {
     return new NextResponse(null, {
       status: 409,
       headers: { "x-channel-state": "archived" },
     });
   }
+
+  // Se a sessão for GOWA, busca o QR do servidor GOWA
+  if (session.provider === "gowa" || session.gowa_device_id) {
+    const gowa = getGowaClient();
+    if (!gowa) {
+      return new NextResponse(null, { status: 503, headers: { "x-gowa-status": "not_configured" } });
+    }
+
+    const deviceId = session.gowa_device_id || session.waha_session_name;
+    if (!deviceId) {
+      return new NextResponse(null, { status: 409, headers: { "x-channel-state": "no-device-id" } });
+    }
+
+    try {
+      const loginRes = await gowa.loginDevice(deviceId);
+      if (!loginRes.qrLink) {
+        return new NextResponse(null, { status: 503, headers: { "x-gowa-status": "no_qr_link" } });
+      }
+
+      const { buffer, contentType } = await gowa.fetchQrImage(loginRes.qrLink, deviceId);
+      return new NextResponse(buffer, {
+        status: 200,
+        headers: { "content-type": contentType || "image/png", "cache-control": "no-store, max-age=0" },
+      });
+    } catch (err) {
+      return new NextResponse(null, {
+        status: 502,
+        headers: { "x-gowa-error": err instanceof Error ? err.message.slice(0, 80) : "unknown" },
+      });
+    }
+  }
+
   // Canal oficial não pareia por QR: `waha_session_name` é NULL nele por CHECK.
-  // Afirmar `string` aqui (era um cast) só adiava a mentira até a URL, que virava
-  // `/api/null/auth/qr` — 404 do transporte, indistinguível de "o QR ainda não
-  // ficou pronto", que é exatamente o estado em que a tela fica insistindo.
   if (!session.waha_session_name) {
     return new NextResponse(null, {
       status: 409,

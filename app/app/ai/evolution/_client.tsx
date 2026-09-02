@@ -12,6 +12,7 @@ import {
 } from "recharts";
 
 import { Card } from "@/components/ui/card";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -353,24 +354,20 @@ export function EvolutionClient({ defaultRange }: { defaultRange: { from: string
             <Label htmlFor="evolution-de" className="text-xs text-text-muted">
               De
             </Label>
-            <Input
+            <DatePicker
               id="evolution-de"
-              type="date"
               value={from}
-              max={to}
-              onChange={(e) => setFrom(e.target.value)}
+              onChange={setFrom}
             />
           </div>
           <div className="space-y-1">
             <Label htmlFor="evolution-ate" className="text-xs text-text-muted">
               Até
             </Label>
-            <Input
+            <DatePicker
               id="evolution-ate"
-              type="date"
               value={to}
-              min={from}
-              onChange={(e) => setTo(e.target.value)}
+              onChange={setTo}
             />
           </div>
         </div>

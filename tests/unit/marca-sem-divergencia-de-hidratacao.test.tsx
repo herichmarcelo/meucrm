@@ -241,7 +241,7 @@ describe("catraca: `branding()` é server-only", () => {
       "app/onboarding/layout.tsx",
       "lib/legal/operador.ts",
     ];
-    const vistos = varridos.filter(chamaBranding).map((f) => path.relative(RAIZ, f));
+    const vistos = varridos.filter(chamaBranding).map((f) => path.relative(RAIZ, f).replace(/\\/g, "/"));
     expect(esperados.filter((e) => !vistos.includes(e))).toEqual([]);
   });
 
@@ -252,7 +252,7 @@ describe("catraca: `branding()` é server-only", () => {
     );
 
     expect(
-      infratores.map((f) => path.relative(RAIZ, f)),
+      infratores.map((f) => path.relative(RAIZ, f).replace(/\\/g, "/")),
       "`branding()` lê `window.__PUBLIC_ENV__` no navegador e `process.env` no\n" +
         "servidor, e as duas fontes divergem desde que o layout raiz passou a\n" +
         "injetar a marca do BANCO. Num client component isso é hydration mismatch\n" +

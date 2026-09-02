@@ -87,10 +87,28 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         "id, organization_id, waha_session_name, webhook_secret_encrypted, status, is_warmup_complete, warmup_started_at",
       )
       .eq("waha_session_name", sessionName);
-  const { data: session, error: sessErr } = await queryTolerantToMissingArchived(
+  let { data: session, error: sessErr } = await queryTolerantToMissingArchived(
     () => base().is(ARCHIVED_AT, null).maybeSingle(),
     () => base().maybeSingle(),
   );
+
+  // Fallback: se não encontrou por waha_session_name exato, busca se há uma única sessão WAHA ativa
+  if (!session) {
+    const baseWaha = () =>
+      admin
+        .from("channel_sessions")
+        .select(
+          "id, organization_id, waha_session_name, webhook_secret_encrypted, status, is_warmup_complete, warmup_started_at",
+        )
+        .eq("provider", "waha");
+    const { data: wahaSessions } = await queryTolerantToMissingArchived(
+      () => baseWaha().is(ARCHIVED_AT, null),
+      () => baseWaha(),
+    );
+    if (wahaSessions && wahaSessions.length === 1 && wahaSessions[0]) {
+      session = wahaSessions[0];
+    }
+  }
 
   if (sessErr) {
     return fail("internal_error", sessErr.message, 500, { requestId });

@@ -10,6 +10,7 @@ import { FUSOS_OFERECIDOS } from "@/lib/tempo/fusos";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -131,14 +132,12 @@ export function AntiBanSheet({ item, canWrite, onClose }: Props) {
         <div className="flex flex-col gap-5 px-4 py-2" data-testid="anti-ban-form">
           <fieldset className="flex flex-col gap-2" data-testid="aquecimento">
             <Label htmlFor="numero-em-uso-desde">Este número é usado desde</Label>
-            <Input
+            <DatePicker
               id="numero-em-uso-desde"
-              type="date"
-              max={new Date().toISOString().slice(0, 10)}
               value={form.numero_em_uso_desde}
-              onChange={(e) => set({ numero_em_uso_desde: e.target.value })}
+              onChange={(val) => set({ numero_em_uso_desde: val })}
               disabled={!canWrite || form.pular_aquecimento}
-              className="w-48"
+              className="w-56"
             />
             <p className="text-xs text-muted-foreground">
               A conexão pode ser nova sem que o número seja. O aquecimento conta a idade do

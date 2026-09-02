@@ -135,6 +135,13 @@ const schema = z.object({
   // assine — aí a verificação passa a ser obrigatória.
   WAHA_WEBHOOK_REQUIRE_SIGNATURE: z.string().optional().default("false"),
 
+  // GOWA (WhatsApp Multi-Device Alternativo)
+  GOWA_API_BASE_URL: z.string().optional().default("http://localhost:4000"),
+  GOWA_API_USER: z.string().optional().default("admin"),
+  GOWA_API_PASS: z.string().optional().default(""),
+  GOWA_WEBHOOK_SECRET: z.string().optional().default(""),
+  GOWA_WEBHOOK_REQUIRE_SIGNATURE: z.string().optional().default("false"),
+
   // Upstash Redis
   UPSTASH_REDIS_REST_URL: required("UPSTASH_REDIS_REST_URL"),
   UPSTASH_REDIS_REST_TOKEN: required("UPSTASH_REDIS_REST_TOKEN"),

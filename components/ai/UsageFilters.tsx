@@ -8,7 +8,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
 
 export interface UsageFiltersAgent {
@@ -115,11 +115,10 @@ export function UsageFilters({ agents, initial }: Props) {
         <Label htmlFor="usage-from" className="text-xs text-muted-foreground">
           De
         </Label>
-        <Input
+        <DatePicker
           id="usage-from"
-          type="date"
           value={from}
-          onChange={(e) => setFrom(e.target.value)}
+          onChange={setFrom}
         />
       </div>
 
@@ -127,11 +126,10 @@ export function UsageFilters({ agents, initial }: Props) {
         <Label htmlFor="usage-to" className="text-xs text-muted-foreground">
           Até
         </Label>
-        <Input
+        <DatePicker
           id="usage-to"
-          type="date"
           value={to}
-          onChange={(e) => setTo(e.target.value)}
+          onChange={setTo}
         />
       </div>
     </div>

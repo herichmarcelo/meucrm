@@ -21,6 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { DatePicker } from "@/components/ui/date-picker";
 import { useCreateLead } from "@/hooks/kanban/useCreateLead";
 import type { Stage } from "@/lib/kanban/types";
 import { createLeadSchema, type CreateLeadInput } from "@/lib/schemas/leads";
@@ -195,10 +196,15 @@ export function NewLeadDialog({ open, onOpenChange, pipelineId, stages, contactI
             </div>
             <div className="space-y-2">
               <Label htmlFor="expected_close_date">Fechamento previsto</Label>
-              <Input
+              <DatePicker
                 id="expected_close_date"
-                type="date"
-                {...form.register("expected_close_date")}
+                value={form.watch("expected_close_date")}
+                onChange={(val) =>
+                  form.setValue("expected_close_date", val, {
+                    shouldValidate: true,
+                    shouldDirty: true,
+                  })
+                }
               />
             </div>
           </div>

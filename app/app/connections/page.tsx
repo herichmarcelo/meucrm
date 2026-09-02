@@ -18,6 +18,12 @@ export default async function ConnectionsPage() {
   const wahaConfigured = Boolean(
     process.env.WAHA_API_BASE_URL && key && key !== "dev_plaintext_change_me",
   );
+  const gowaConfigured = Boolean(
+    process.env.GOWA_API_BASE_URL &&
+      process.env.GOWA_API_USER &&
+      process.env.GOWA_API_PASS,
+  );
+  const qrTransportConfigured = wahaConfigured || gowaConfigured;
 
   return (
     <div className="flex h-full flex-col gap-6 p-6">
@@ -28,7 +34,11 @@ export default async function ConnectionsPage() {
           da Meta, e acompanhe a saúde de cada um.
         </p>
       </header>
-      <ConexoesShell wahaConfigured={wahaConfigured} />
+      <ConexoesShell
+        wahaConfigured={qrTransportConfigured}
+        wahaAvailable={wahaConfigured}
+        gowaAvailable={gowaConfigured}
+      />
     </div>
   );
 }

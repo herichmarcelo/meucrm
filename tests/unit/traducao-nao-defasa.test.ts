@@ -87,7 +87,7 @@ describe.each(TRADUCOES)("$traducao ($idioma)", (par) => {
   });
 
   it("tem um selo na linha 1", () => {
-    const primeira = readFileSync(raiz(par.traducao), "utf8").split("\n", 1)[0] ?? "";
+    const primeira = (readFileSync(raiz(par.traducao), "utf8").split("\n", 1)[0] ?? "").trimEnd();
     expect(
       primeira,
       `${par.traducao} não começa com o selo. Rode: ${COMANDO_DE_RESELO}`,

@@ -32,6 +32,7 @@ export {
   Gauge,
   WifiSlash,
   Clock,
+  CalendarBlank as Calendar,
   // marca da instalação (o revendedor troca nome e cor do produto)
   Palette,
   // health dashboard

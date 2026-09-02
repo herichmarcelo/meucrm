@@ -23,10 +23,13 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   ArrowsClockwise,
   CheckCircle,
   CircleNotch,
+  PencilSimple,
   Phone,
   Plus,
   ShieldCheck,
@@ -72,7 +75,7 @@ function errMsg(err: unknown, fallback: string): string {
  * restringe demais, nunca promete de menos.
  */
 function dependeDoTransporte(c: ChannelSession): boolean {
-  return Boolean(c.waha_session_name);
+  return Boolean(c.waha_session_name || c.gowa_device_id || c.provider === "gowa" || c.provider === "waha");
 }
 
 /** "3 conversas" / "1 conversa" — ou nada, quando não há o que contar. */
@@ -88,7 +91,15 @@ function enumerar(partes: (string | null)[]): string {
   return uteis.length > 0 ? `${uteis.join(", ")} e ${ultimo}` : ultimo;
 }
 
-export function ConnectionsClient({ wahaConfigured }: { wahaConfigured: boolean }) {
+export function ConnectionsClient({
+  wahaConfigured,
+  wahaAvailable = true,
+  gowaAvailable = false,
+}: {
+  wahaConfigured: boolean;
+  wahaAvailable?: boolean;
+  gowaAvailable?: boolean;
+}) {
   const qc = useQueryClient();
   const {
     data: sessions,
@@ -98,6 +109,8 @@ export function ConnectionsClient({ wahaConfigured }: { wahaConfigured: boolean 
   } = useChannelSessions({ refetchInterval: 10_000 });
   const [busyId, setBusyId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [toRename, setToRename] = useState<ChannelSession | null>(null);
   const [checking, setChecking] = useState(false);
   const [qr, setQr] = useState<{ sessionId: string; title: string } | null>(null);
   const [antiBanId, setAntiBanId] = useState<string | null>(null);
@@ -109,9 +122,9 @@ export function ConnectionsClient({ wahaConfigured }: { wahaConfigured: boolean 
     [qc],
   );
 
-  // Health check ao vivo de todos os canais — consulta o WAHA e grava
+  // Health check ao vivo de todos os canais — consulta o WAHA/GOWA e grava
   // last_health_check_at. É a verificação de saúde de verdade (o status do DB
-  // pode estar velho se o WAHA caiu sem emitir evento).
+  // pode estar velho se o motor caiu sem emitir evento).
   const runHealthCheck = useCallback(
     async (list: ChannelSession[]) => {
       if (!wahaConfigured || list.length === 0) return;
@@ -135,21 +148,33 @@ export function ConnectionsClient({ wahaConfigured }: { wahaConfigured: boolean 
     void runHealthCheck(sessions);
   }, [sessions, runHealthCheck]);
 
-  const handleConnectNew = useCallback(async () => {
-    setCreating(true);
-    try {
-      const res = await apiClient.post<{ data: ChannelSession }>(
-        "/api/v1/channel-sessions",
-        {},
-      );
-      invalidate();
-      setQr({ sessionId: res.data.id, title: "Conectar novo WhatsApp" });
-    } catch (err) {
-      toast.error(errMsg(err, "Não foi possível iniciar a conexão."));
-    } finally {
-      setCreating(false);
-    }
-  }, [invalidate]);
+  const handleConnectNew = useCallback(
+    async (displayName: string, provider?: "gowa" | "waha") => {
+      setCreating(true);
+      try {
+        const res = await apiClient.post<{ data: ChannelSession }>(
+          "/api/v1/channel-sessions",
+          {
+            display_name: displayName.trim() || undefined,
+            provider,
+          },
+        );
+        invalidate();
+        setCreateModalOpen(false);
+        setQr({
+          sessionId: res.data.id,
+          title: displayName.trim()
+            ? `Conectar WhatsApp — ${displayName.trim()}`
+            : "Conectar novo WhatsApp",
+        });
+      } catch (err) {
+        toast.error(errMsg(err, "Não foi possível iniciar a conexão."));
+      } finally {
+        setCreating(false);
+      }
+    },
+    [invalidate],
+  );
 
   // Reconexão suave: a maioria das quedas é passageira (rede, container
   // reiniciado) e a credencial pareada continua boa, então o número volta sem
@@ -219,7 +244,7 @@ export function ConnectionsClient({ wahaConfigured }: { wahaConfigured: boolean 
               Atualizar saúde
             </Button>
           )}
-          <Button size="sm" disabled={creating || !wahaConfigured} onClick={handleConnectNew}>
+          <Button size="sm" disabled={creating || !wahaConfigured} onClick={() => setCreateModalOpen(true)}>
             {creating ? (
               <CircleNotch size={14} className="animate-spin" aria-hidden />
             ) : (
@@ -234,16 +259,9 @@ export function ConnectionsClient({ wahaConfigured }: { wahaConfigured: boolean 
         <div className="rounded-md border border-warning bg-warning-bg p-4 text-sm text-warning-fg">
           <p className="font-medium">O serviço do WhatsApp não está configurado.</p>
           <p className="mt-1">
-            Faltam o endereço e a chave do serviço (<code>WAHA_API_BASE_URL</code> e{" "}
-            <code>WAHA_API_KEY</code>) nas variáveis de ambiente desta instalação. Enquanto isso,
-            não dá para conectar, reconectar nem excluir os números pareados por QR — excluir um
-            número também o desconecta do aparelho, e sem o serviço isso não acontece.
-          </p>
-          <p className="mt-1">
-            Se você roda tudo na mesma máquina, o container sobe com{" "}
-            <code>docker compose up -d waha</code>. Já apareceu aqui o caso oposto: o container
-            no ar e o endereço configurado apontando para um lugar que não existe — subir o
-            container de novo não conserta isso.
+            Faltam o endereço e a chave do serviço (<code>WAHA_API_BASE_URL</code> / <code>GOWA_API_BASE_URL</code>)
+            nas variáveis de ambiente desta instalação. Enquanto isso, não dá para conectar, reconectar nem excluir
+            os números pareados por QR — excluir um número também o desconecta do aparelho, e sem o serviço isso não acontece.
           </p>
         </div>
       )}
@@ -299,6 +317,19 @@ export function ConnectionsClient({ wahaConfigured }: { wahaConfigured: boolean 
                     <div className="flex items-center gap-2">
                       <Phone size={16} className="text-muted-foreground" aria-hidden />
                       <span className="truncate text-sm font-medium">{channelLabel(c)}</span>
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-muted text-muted-foreground uppercase font-semibold">
+                        {c.provider === "gowa" ? "GOWA" : c.provider === "waha" ? "WAHA" : c.provider ?? "WA"}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+                        onClick={() => setToRename(c)}
+                        title="Renomear instância / equipe"
+                        aria-label={`Renomear ${channelLabel(c)}`}
+                      >
+                        <PencilSimple size={12} aria-hidden />
+                      </Button>
                     </div>
                     {c.phone_number && c.display_name && (
                       <p className="mt-0.5 font-mono text-xs text-muted-foreground">
@@ -357,6 +388,21 @@ export function ConnectionsClient({ wahaConfigured }: { wahaConfigured: boolean 
         </div>
       )}
 
+      <CriarConexaoDialog
+        open={createModalOpen}
+        creating={creating}
+        wahaAvailable={wahaAvailable}
+        gowaAvailable={gowaAvailable}
+        onClose={() => setCreateModalOpen(false)}
+        onSubmit={handleConnectNew}
+      />
+
+      <RenomearCanalDialog
+        canal={toRename}
+        onClose={() => setToRename(null)}
+        onRenamed={invalidate}
+      />
+
       <AntiBanSheet
         item={pacingItems.find((i) => i.channel_session.id === antiBanId) ?? null}
         canWrite
@@ -382,6 +428,158 @@ export function ConnectionsClient({ wahaConfigured }: { wahaConfigured: boolean 
         />
       )}
     </div>
+  );
+}
+
+function CriarConexaoDialog({
+  open,
+  creating,
+  wahaAvailable,
+  gowaAvailable,
+  onClose,
+  onSubmit,
+}: {
+  open: boolean;
+  creating: boolean;
+  wahaAvailable?: boolean;
+  gowaAvailable?: boolean;
+  onClose: () => void;
+  onSubmit: (displayName: string, provider?: "gowa" | "waha") => Promise<void>;
+}) {
+  const [name, setName] = useState("");
+  const defaultProvider = gowaAvailable ? "gowa" : "waha";
+  const [provider, setProvider] = useState<"gowa" | "waha">(defaultProvider);
+
+  const bothAvailable = Boolean(wahaAvailable && gowaAvailable);
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && !creating && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Conectar novo WhatsApp</DialogTitle>
+          <DialogDescription>
+            Defina o nome da instância para identificar as equipes que atendem por ela (ex: <strong>VENDEDORES</strong>, <strong>SUPORTE</strong>).
+          </DialogDescription>
+        </DialogHeader>
+        <form
+          onSubmit={async (e) => {
+            e.preventDefault();
+            await onSubmit(name, provider);
+          }}
+          className="flex flex-col gap-4 py-2"
+        >
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="instance-name">Nome da Instância / Equipe (opcional)</Label>
+            <Input
+              id="instance-name"
+              placeholder="Ex: VENDEDORES, SUPORTE, PLANTÃO"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              disabled={creating}
+              autoFocus
+            />
+          </div>
+
+          {bothAvailable && (
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="provider-select">Motor de WhatsApp</Label>
+              <select
+                id="provider-select"
+                className="flex h-10 w-full rounded-sm border border-border bg-bg px-3 py-2 text-sm text-text"
+                value={provider}
+                onChange={(e) => setProvider(e.target.value as "gowa" | "waha")}
+                disabled={creating}
+              >
+                <option value="gowa">GOWA (Go Multi-Device — ultraleve 30MB)</option>
+                <option value="waha">WAHA Plus (Baileys/NOWEB)</option>
+              </select>
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="outline" onClick={onClose} disabled={creating}>
+              Cancelar
+            </Button>
+            <Button type="submit" disabled={creating}>
+              {creating ? <CircleNotch size={14} className="animate-spin" aria-hidden /> : <Plus size={14} aria-hidden />}
+              Continuar e Gerar QR
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function RenomearCanalDialog({
+  canal,
+  onClose,
+  onRenamed,
+}: {
+  canal: ChannelSession | null;
+  onClose: () => void;
+  onRenamed: () => void;
+}) {
+  const [name, setName] = useState(canal?.display_name ?? "");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setName(canal?.display_name ?? "");
+  }, [canal]);
+
+  if (!canal) return null;
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && !saving && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Renomear Instância</DialogTitle>
+          <DialogDescription>
+            Defina o nome da instância para organizar o atendimento da sua equipe (ex: <strong>VENDEDORES</strong>, <strong>SUPORTE</strong>).
+          </DialogDescription>
+        </DialogHeader>
+        <form
+          onSubmit={async (e) => {
+            e.preventDefault();
+            setSaving(true);
+            try {
+              await apiClient.patch(`/api/v1/channel-sessions/${canal.id}`, {
+                display_name: name.trim() || null,
+              });
+              toast.success("Nome da instância atualizado!");
+              onRenamed();
+              onClose();
+            } catch (err) {
+              toast.error(errMsg(err, "Não foi possível atualizar o nome."));
+            } finally {
+              setSaving(false);
+            }
+          }}
+          className="flex flex-col gap-4 py-2"
+        >
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="edit-instance-name">Nome da Instância</Label>
+            <Input
+              id="edit-instance-name"
+              placeholder="Ex: VENDEDORES, SUPORTE"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              disabled={saving}
+              autoFocus
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
+              Cancelar
+            </Button>
+            <Button type="submit" disabled={saving}>
+              {saving ? <CircleNotch size={14} className="animate-spin" aria-hidden /> : null}
+              Salvar
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
