@@ -635,6 +635,23 @@ export async function sendMessageHandler(
           // cópia guardada no envio, que poderia divergir da linha.
           replyToExternalId: citada?.external_id ?? null,
         }));
+      } else if (input.media_url) {
+        // Envio direto por URL externa (ex.: GIF animado da Giphy)
+        const filename = input.media_url.split("/").pop()?.split("?")[0] || "animacao.gif";
+        ({ externalId } = await adapter.send({
+          organizationId: ctx.organization_id,
+          sessionRef: resolveSessionRef(c.channel_sessions),
+          to: chatId,
+          providerConversationId: c.provider_conversation_id,
+          kind: input.type || "image",
+          media: {
+            url: input.media_url,
+            mime: input.media_mime ?? "image/gif",
+            filename,
+            caption: input.body ?? null,
+          },
+          replyToExternalId: citada?.external_id ?? null,
+        }));
       } else if (input.type === "contact") {
         const sc = outboundMetadata.shared_contact as
           | { name: string; phone_number: string }

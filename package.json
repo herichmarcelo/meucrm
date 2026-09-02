@@ -37,6 +37,7 @@
     "@ai-sdk/openai": "^4.0.43",
     "@emoji-mart/data": "^1.2.1",
     "@emoji-mart/react": "^1.1.1",
+    "@giphy/js-fetch-api": "^5.8.0",
     "@hello-pangea/dnd": "^18.0.1",
     "@hookform/resolvers": "^5.9.1",
     "@modelcontextprotocol/sdk": "^1.30.0",

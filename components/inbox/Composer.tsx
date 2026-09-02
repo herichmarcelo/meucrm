@@ -16,10 +16,12 @@ import { ContactPickerDialog } from "@/components/inbox/composer/ContactPickerDi
 import { AudioRecorder } from "@/components/inbox/composer/AudioRecorder";
 import { DraftReplyButton } from "@/components/inbox/composer/DraftReplyButton";
 import { EmojiButton } from "@/components/inbox/composer/EmojiButton";
+import { GifButton } from "@/components/inbox/composer/GifButton";
 import { resolveSlash, TemplateMenu } from "@/components/inbox/composer/TemplateMenu";
 import { useCreateNote } from "@/hooks/inbox/useCreateNote";
 import { useMessageTemplates, type MessageTemplate } from "@/hooks/inbox/useMessageTemplates";
 import { X } from "lucide-react";
+import { toast } from "sonner";
 import { useSendMessage } from "@/hooks/inbox/useSendMessage";
 import { useUploadMedia } from "@/hooks/inbox/useUploadMedia";
 import { imagemDoClipboard } from "@/lib/inbox/clipboard-image";
@@ -308,6 +310,33 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
               });
             }}
           />
+          {mode === "reply" && (
+            <GifButton
+              disabled={respostaBarrada}
+              onPick={(gif) => {
+                send.mutate(
+                  {
+                    conversation_id: conversationId,
+                    type: "image",
+                    media_url: gif.url,
+                    media_mime: "image/gif",
+                    reply_to_message_id: respondendo?.id,
+                  },
+                  {
+                    onSuccess: () => {
+                      if (respondendo?.id) onCancelarResposta?.();
+                    },
+                    onError: (err) => {
+                      toast.error(
+                        "Erro ao enviar GIF: " +
+                          (err instanceof Error ? err.message : "tente novamente"),
+                      );
+                    },
+                  },
+                );
+              }}
+            />
+          )}
           <textarea
             ref={taRef}
             value={text}

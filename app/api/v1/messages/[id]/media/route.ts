@@ -89,6 +89,12 @@ export async function GET(_req: NextRequest, ctx: RouteCtx): Promise<Response> {
   // duro, o path de um anexo do canal intermediado era procurado dentro do
   // contêiner do canal por QR — 404, e a tela dizia "mídia indisponível".
   if (msg.media_url) {
+    if (msg.media_url.startsWith("http://") || msg.media_url.startsWith("https://")) {
+      const response = NextResponse.redirect(msg.media_url, 302);
+      response.headers.set("X-Request-Id", requestId);
+      return response;
+    }
+
     try {
       const admin = createAdminClient();
       const { data: sessao } = await admin
