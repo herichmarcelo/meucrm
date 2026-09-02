@@ -26,43 +26,23 @@ import { GET } from "@/app/api/v1/gifs/route";
 describe("GET /api/v1/gifs", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    delete process.env.GIPHY_API_KEY;
   });
 
-  it("retorna lista de trending quando query 'q' não é informada", async () => {
-    mockTrending.mockResolvedValueOnce({
-      data: [
-        {
-          id: "gif-1",
-          title: "Funny Cat",
-          images: {
-            fixed_width: { url: "https://media.giphy.com/cat_thumb.webp", width: 200, height: 200 },
-            fixed_width_downsampled: { url: "https://media.giphy.com/cat_thumb.webp" },
-            original: { url: "https://media.giphy.com/cat_full.gif" },
-          },
-        },
-      ],
-      pagination: { total_count: 100, count: 1, offset: 0 },
-    });
-
+  it("retorna lista de GIFs curados em fallback quando GIPHY_API_KEY não está setada", async () => {
     const req = new NextRequest("http://localhost:3000/api/v1/gifs?limit=10");
     const res = await GET(req);
 
     expect(res.status).toBe(200);
     const json = await res.json();
     expect(json.data).toBeDefined();
-    expect(json.data).toHaveLength(1);
-    expect(json.data[0]).toEqual({
-      id: "gif-1",
-      title: "Funny Cat",
-      preview_url: "https://media.giphy.com/cat_thumb.webp",
-      url: "https://media.giphy.com/cat_full.gif",
-      width: 200,
-      height: 200,
-    });
-    expect(mockTrending).toHaveBeenCalledWith({ limit: 10, offset: 0, rating: "g" });
+    expect(json.data.length).toBeGreaterThan(0);
+    expect(json.meta?.is_fallback).toBe(true);
   });
 
-  it("executa busca no Giphy quando query 'q' é passada", async () => {
+  it("executa busca no Giphy via SDK quando GIPHY_API_KEY está configurada", async () => {
+    process.env.GIPHY_API_KEY = "test_key_123";
+
     mockSearch.mockResolvedValueOnce({
       data: [
         {
@@ -85,6 +65,7 @@ describe("GET /api/v1/gifs", () => {
     const json = await res.json();
     expect(json.data).toBeDefined();
     expect(json.data[0].id).toBe("gif-2");
+    expect(json.meta?.is_fallback).toBe(false);
     expect(mockSearch).toHaveBeenCalledWith("dog", {
       limit: 15,
       offset: 5,

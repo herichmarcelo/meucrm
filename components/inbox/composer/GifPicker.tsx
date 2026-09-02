@@ -10,13 +10,13 @@ import type { GiphyGifItem } from "@/app/api/v1/gifs/route";
 
 const QUICK_TAGS = [
   { label: "Em Alta", query: "" },
-  { label: "Haha", query: "haha risada" },
-  { label: "Obrigado", query: "obrigado thank you" },
-  { label: "Parabéns", query: "parabens celebration" },
-  { label: "Joinha", query: "thumbs up joinha" },
-  { label: "Bora", query: "let's go bora" },
-  { label: "Coração", query: "love coracao" },
-  { label: "Dança", query: "dance danca" },
+  { label: "Haha", query: "haha" },
+  { label: "Obrigado", query: "obrigado" },
+  { label: "Parabéns", query: "parabens" },
+  { label: "Joinha", query: "joinha" },
+  { label: "Bora", query: "bora" },
+  { label: "Coração", query: "coracao" },
+  { label: "Dança", query: "danca" },
 ];
 
 interface Props {
@@ -44,7 +44,7 @@ export function GifPicker({ onPick }: Props) {
         throw new Error("Falha ao buscar GIFs");
       }
       const data = await res.json();
-      if (data.ok && Array.isArray(data.data)) {
+      if (Array.isArray(data.data)) {
         setGifs(data.data);
       } else {
         setGifs([]);
@@ -61,7 +61,7 @@ export function GifPicker({ onPick }: Props) {
       startTransition(() => {
         fetchGifs(query);
       });
-    }, 300);
+    }, 250);
 
     return () => clearTimeout(timer);
   }, [query]);
@@ -130,7 +130,7 @@ export function GifPicker({ onPick }: Props) {
       <div className="flex-1 overflow-y-auto p-2 scrollbar-thin scrollbar-thumb-muted-foreground/20">
         {loading ? (
           <div className="grid grid-cols-2 gap-2">
-            {Array.from({ length: 8 }).map((_, i) => (
+            {Array.from({ length: 6 }).map((_, i) => (
               <Skeleton key={i} className="h-28 w-full rounded-md" />
             ))}
           </div>
@@ -147,8 +147,13 @@ export function GifPicker({ onPick }: Props) {
             </Button>
           </div>
         ) : gifs.length === 0 ? (
-          <div className="flex h-full items-center justify-center text-center p-4">
-            <p className="text-xs text-muted-foreground">Nenhum GIF encontrado para &quot;{query}&quot;</p>
+          <div className="flex h-full flex-col items-center justify-center text-center p-4">
+            <p className="text-xs text-muted-foreground mb-1">
+              Nenhum GIF encontrado para &quot;{query}&quot;.
+            </p>
+            <p className="text-[11px] text-muted-foreground/80">
+              Para busca ilimitada, adicione <code className="rounded bg-muted px-1">GIPHY_API_KEY</code> no <code className="rounded bg-muted px-1">.env.local</code>.
+            </p>
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-2">
@@ -157,6 +162,7 @@ export function GifPicker({ onPick }: Props) {
                 key={gif.id}
                 type="button"
                 onClick={() => onPick(gif)}
+                title={gif.title}
                 className="group relative h-28 w-full overflow-hidden rounded-md bg-muted/60 focus-visible:outline-2 focus-visible:outline-ring hover:opacity-90 transition-transform active:scale-95"
               >
                 <img
