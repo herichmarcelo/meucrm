@@ -67,7 +67,8 @@ export function ehIdentificadorTecnico(valor: string): boolean {
 export function rotuloDoContato(c: ContatoNomeavel | null | undefined): string {
   if (!c) return SEM_NOME;
 
-  const candidatos = [c.display_name, c.name];
+  // Primeiro o nome formal/verificado no CRM (name), depois o apelido/pushName do WhatsApp (display_name)
+  const candidatos = [c.name, c.display_name];
   for (const bruto of candidatos) {
     const v = (bruto ?? "").trim();
     if (v !== "" && !ehIdentificadorTecnico(v)) return v;

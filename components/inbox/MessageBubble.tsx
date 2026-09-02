@@ -1,6 +1,4 @@
 "use client";
-import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
 import { ArrowBendUpLeft, Check, Checks, Robot, WarningOctagon } from "@/lib/ui/icons";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -8,6 +6,7 @@ import type { Message } from "@/lib/types/messaging";
 import { CitationButton } from "@/components/ai/CitationButton";
 import { MediaRenderer } from "@/components/inbox/media/MediaRenderer";
 import { ContactCard } from "@/components/inbox/media/ContactCard";
+import { useTempo } from "@/lib/tempo/TempoProvider";
 import {
   extractCitations,
   isAiGeneratedMessage,
@@ -24,7 +23,7 @@ interface Props {
 
 function AckIndicator({ status }: { status: string }) {
   if (status === "read") {
-    return <Checks size={12} weight="bold" className="text-blue-400" aria-label="Lida" />;
+    return <Checks size={12} weight="bold" className="text-current/70" aria-label="Lida" />;
   }
   if (status === "delivered") {
     return <Checks size={12} weight="bold" className="text-current/70" aria-label="Entregue" />;
@@ -37,7 +36,8 @@ function AckIndicator({ status }: { status: string }) {
 
 export function MessageBubble({ message, debugCitations, onResponder, citada }: Props) {
   const isOutbound = message.direction === "outbound";
-  const time = format(new Date(message.sent_at), "HH:mm", { locale: ptBR });
+  const { formatarHora } = useTempo();
+  const time = formatarHora(message.sent_at);
   const isFailed = message.status === "failed";
   const hasMedia = Boolean(message.media_url || message.media_storage_path);
   const isContact = message.type === "contact";

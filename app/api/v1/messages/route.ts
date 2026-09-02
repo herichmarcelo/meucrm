@@ -42,7 +42,7 @@ export async function POST(req: NextRequest): Promise<Response> {
       supabase,
       {
         organization_id: activeOrg.orgId,
-        actor: { type: "user", id: user.id },
+        actor: { type: "user", id: user.id, signature: user.signature },
         requestId,
       },
       input as SendMessageInput,

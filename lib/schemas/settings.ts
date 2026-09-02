@@ -48,10 +48,20 @@ export const canonicalConversationTagsSchema = z
 export type CanonicalConversationTags = z.infer<typeof canonicalConversationTagsSchema>;
 export type Locale = (typeof LOCALES)[number];
 
+export const TIME_FORMATS = ["24h", "12h"] as const;
+export type TimeFormat = (typeof TIME_FORMATS)[number];
+
 export const profileSchema = z.object({
   full_name: z.string().min(1).max(120).nullable().optional(),
   locale: z.enum(LOCALES),
   timezone: z.string().min(1).max(64),
+  time_format: z.enum(TIME_FORMATS).default("24h"),
+  signature: z
+    .string()
+    .max(100)
+    .transform((v) => (v.trim() === "" ? null : v.trim()))
+    .nullable()
+    .optional(),
   avatar_url: z
     .string()
     .url()

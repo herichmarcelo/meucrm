@@ -161,6 +161,45 @@ export class GowaClient {
   }
 
   /**
+   * Baixa mídia recebida de uma mensagem do GOWA.
+   */
+  async fetchInboundMedia(mediaUrlOrPath: string, deviceId?: string): Promise<{ buffer: ArrayBuffer; contentType: string }> {
+    let url: string;
+    if (mediaUrlOrPath.startsWith("http://") || mediaUrlOrPath.startsWith("https://")) {
+      try {
+        const parsed = new URL(mediaUrlOrPath);
+        url = `${this.baseUrl.replace(/\/+$/, "")}${parsed.pathname}${parsed.search}`;
+      } catch {
+        url = mediaUrlOrPath;
+      }
+    } else {
+      url = `${this.baseUrl.replace(/\/+$/, "")}/${mediaUrlOrPath.replace(/^\/+/, "")}`;
+    }
+
+    const headers: Record<string, string> = {
+      Authorization: this.authHeader(),
+    };
+    if (deviceId) {
+      headers["X-Device-Id"] = deviceId;
+    }
+
+    const res = await fetch(url, {
+      method: "GET",
+      headers,
+      cache: "no-store",
+      signal: AbortSignal.timeout(30_000),
+    });
+
+    if (!res.ok) {
+      throw new Error(`gowa_media_fetch_${res.status}`);
+    }
+
+    const contentType = res.headers.get("content-type") ?? "application/octet-stream";
+    const buffer = await res.arrayBuffer();
+    return { buffer, contentType };
+  }
+
+  /**
    * Consulta o status de conexão de um device.
    */
   async getDeviceStatus(deviceId: string): Promise<GowaDeviceStatus> {
@@ -310,8 +349,26 @@ export class GowaClient {
       });
 
       if (!res.ok) return null;
-      const json = (await res.json()) as { results?: { url?: string; avatar_url?: string } };
-      return json.results?.url ?? json.results?.avatar_url ?? null;
+      const json = (await res.json()) as {
+        results?: { url?: string; avatar_url?: string; avatar_path?: string; avatar?: string };
+        url?: string;
+        avatar_url?: string;
+      };
+
+      const rawUrl =
+        json.results?.url ??
+        json.results?.avatar_url ??
+        json.results?.avatar ??
+        json.results?.avatar_path ??
+        json.avatar_url ??
+        json.url ??
+        null;
+
+      if (!rawUrl) return null;
+      if (rawUrl.startsWith("http://") || rawUrl.startsWith("https://")) {
+        return rawUrl;
+      }
+      return `${this.baseUrl.replace(/\/+$/, "")}/${rawUrl.replace(/^\/+/, "")}`;
     } catch {
       return null;
     }

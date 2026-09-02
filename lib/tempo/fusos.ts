@@ -31,6 +31,19 @@
  * termina — e a busca é justamente onde ele digita errado.
  */
 export const FUSOS_OFERECIDOS: { codigo: string; rotulo: string }[] = [
+  { codigo: "America/Sao_Paulo", rotulo: "São Paulo (Brasil)" },
+  { codigo: "America/Campo_Grande", rotulo: "Campo Grande (Brasil)" },
+  { codigo: "America/Cuiaba", rotulo: "Cuiabá (Brasil)" },
+  { codigo: "America/Manaus", rotulo: "Manaus (Brasil)" },
+  { codigo: "America/Porto_Velho", rotulo: "Porto Velho (Brasil)" },
+  { codigo: "America/Boa_Vista", rotulo: "Boa Vista (Brasil)" },
+  { codigo: "America/Rio_Branco", rotulo: "Rio Branco (Brasil)" },
+  { codigo: "America/Belem", rotulo: "Belém (Brasil)" },
+  { codigo: "America/Recife", rotulo: "Recife (Brasil)" },
+  { codigo: "America/Fortaleza", rotulo: "Fortaleza (Brasil)" },
+  { codigo: "America/Maceio", rotulo: "Maceió (Brasil)" },
+  { codigo: "America/Bahia", rotulo: "Salvador / Bahia (Brasil)" },
+  { codigo: "America/Noronha", rotulo: "Fernando de Noronha (Brasil)" },
   { codigo: "America/Asuncion", rotulo: "Assunção (Paraguai)" },
   { codigo: "America/Argentina/Buenos_Aires", rotulo: "Buenos Aires (Argentina)" },
   { codigo: "America/Montevideo", rotulo: "Montevidéu (Uruguai)" },
@@ -39,11 +52,6 @@ export const FUSOS_OFERECIDOS: { codigo: string; rotulo: string }[] = [
   { codigo: "America/Lima", rotulo: "Lima (Peru)" },
   { codigo: "America/Bogota", rotulo: "Bogotá (Colômbia)" },
   { codigo: "America/Mexico_City", rotulo: "Cidade do México (México)" },
-  { codigo: "America/Sao_Paulo", rotulo: "São Paulo (Brasil)" },
-  { codigo: "America/Manaus", rotulo: "Manaus (Brasil)" },
-  { codigo: "America/Belem", rotulo: "Belém (Brasil)" },
-  { codigo: "America/Recife", rotulo: "Recife (Brasil)" },
-  { codigo: "America/Fortaleza", rotulo: "Fortaleza (Brasil)" },
   { codigo: "UTC", rotulo: "UTC" },
 ];
 

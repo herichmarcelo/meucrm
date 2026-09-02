@@ -118,7 +118,7 @@ export const gowaAdapter: ChannelAdapter = {
       throw new Error("gowa_not_configured");
     }
 
-    const { buffer, contentType } = await client.fetchQrImage(input.url, input.sessionRef);
+    const { buffer, contentType } = await client.fetchInboundMedia(input.url, input.sessionRef);
     return {
       buffer: Buffer.from(buffer),
       mime: input.hintMime ?? contentType ?? "application/octet-stream",

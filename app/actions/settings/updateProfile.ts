@@ -32,6 +32,8 @@ export async function updateProfile(input: ProfileInput): Promise<UpdateProfileR
       full_name: parsed.data.full_name ?? null,
       locale: parsed.data.locale,
       timezone: parsed.data.timezone,
+      time_format: parsed.data.time_format,
+      signature: parsed.data.signature ?? null,
       avatar_url: parsed.data.avatar_url ?? null,
     },
   });
@@ -53,6 +55,8 @@ export async function updateProfile(input: ProfileInput): Promise<UpdateProfileR
     metadata: {
       locale: parsed.data.locale,
       timezone: parsed.data.timezone,
+      time_format: parsed.data.time_format,
+      signature: parsed.data.signature ?? null,
     },
   });
 

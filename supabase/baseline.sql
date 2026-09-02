@@ -13990,4 +13990,47 @@ create unique index if not exists channel_sessions_gowa_device_id_ativo_unique
   on public.channel_sessions (gowa_device_id)
   where archived_at is null and gowa_device_id is not null;
 
+-- ---- mensagens agendadas (migration 0170) ----
+create table if not exists public.scheduled_messages (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  contact_id uuid not null references public.contacts(id) on delete cascade,
+  conversation_id uuid references public.conversations(id) on delete set null,
+  template_id uuid references public.message_templates(id) on delete set null,
+  raw_body text not null,
+  scheduled_for timestamptz not null,
+  status text not null default 'pending' check (status in ('pending', 'sent', 'failed', 'cancelled')),
+  sent_at timestamptz,
+  cancelled_at timestamptz,
+  error_message text,
+  created_by_user_id uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists idx_scheduled_messages_org on public.scheduled_messages (organization_id);
+create index if not exists idx_scheduled_messages_contact on public.scheduled_messages (contact_id, organization_id, status);
+create index if not exists idx_scheduled_messages_pending on public.scheduled_messages (scheduled_for) where status = 'pending';
+
+alter table public.scheduled_messages enable row level security;
+
+drop policy if exists "scheduled_messages_select" on public.scheduled_messages;
+create policy "scheduled_messages_select" on public.scheduled_messages
+  for select using (
+    organization_id in (select public.fn_user_org_ids())
+    or public.fn_is_platform_admin()
+  );
+
+drop policy if exists "scheduled_messages_write" on public.scheduled_messages;
+create policy "scheduled_messages_write" on public.scheduled_messages
+  for all using (
+    (organization_id in (select public.fn_user_org_ids()) and public.fn_role_at_least(organization_id, 'agent'))
+    or public.fn_is_platform_admin()
+  )
+  with check (
+    (organization_id in (select public.fn_user_org_ids()) and public.fn_role_at_least(organization_id, 'agent'))
+    or public.fn_is_platform_admin()
+  );
+
 notify pgrst, 'reload schema';
+

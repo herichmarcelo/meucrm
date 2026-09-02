@@ -40,9 +40,12 @@ const RAIZ = join(__dirname, "..", "..");
  */
 const MODULOS_PUROS = ["@/lib/leads/timeline-query"] as const;
 
+import { writeFileSync, unlinkSync } from "node:fs";
+
 /** Importa o módulo num processo filho SEM as variáveis do app. */
 function importaComAmbienteLimpo(modulo: string): { ok: boolean; erro: string } {
-  const script = `import(${JSON.stringify(modulo)}).then(()=>{console.log("OK")},(e)=>{console.log("ERRO:"+String(e && e.message).split("\\n")[0]);});`;
+  const modPath = modulo.startsWith("@/") ? `./${modulo.slice(2)}` : modulo;
+  const tmpFile = join(RAIZ, `temp_eval_${Math.random().toString(36).slice(2)}.mjs`);
   // Só PATH e HOME: PATH para achar o `npx`, HOME para o cache dele. Nenhuma
   // variável do app — é justamente a ausência delas que o teste mede.
   // `NODE_ENV` fica de fora de propósito; o cast existe porque o tipo do Node o
@@ -52,16 +55,26 @@ function importaComAmbienteLimpo(modulo: string): { ok: boolean; erro: string } 
     HOME: process.env.HOME ?? "",
   } as unknown as NodeJS.ProcessEnv;
   try {
-    const saida = execFileSync("npx", ["tsx", "--eval", script], {
+    writeFileSync(
+      tmpFile,
+      `import('${modPath}').then(()=>{console.log('OK')},(e)=>{console.log('ERRO:'+String(e && e.message).split('\\n')[0]);});`,
+    );
+    const npxCmd = process.platform === "win32" ? "npx.cmd" : "npx";
+    const saida = execFileSync(npxCmd, ["tsx", tmpFile], {
       cwd: RAIZ,
       env: limpo,
       encoding: "utf8",
       timeout: 120_000,
       stdio: ["ignore", "pipe", "pipe"],
+      shell: process.platform === "win32",
     });
     return { ok: saida.includes("OK"), erro: saida.trim() };
   } catch (e) {
     return { ok: false, erro: e instanceof Error ? e.message.slice(0, 400) : String(e) };
+  } finally {
+    try {
+      unlinkSync(tmpFile);
+    } catch {}
   }
 }
 

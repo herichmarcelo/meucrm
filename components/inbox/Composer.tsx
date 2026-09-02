@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { AttachMenu } from "@/components/inbox/composer/AttachMenu";
 import { AttachmentPreviewDialog } from "@/components/inbox/composer/AttachmentPreviewDialog";
 import { ContactPickerDialog } from "@/components/inbox/composer/ContactPickerDialog";
+import { ScheduleMessageDialog } from "@/components/inbox/composer/ScheduleMessageDialog";
 import { AudioRecorder } from "@/components/inbox/composer/AudioRecorder";
 import { DraftReplyButton } from "@/components/inbox/composer/DraftReplyButton";
 import { EmojiButton } from "@/components/inbox/composer/EmojiButton";
@@ -79,6 +80,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   const [text, setText] = useState("");
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [contactPickerOpen, setContactPickerOpen] = useState(false);
+  const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
   const [menuDismissed, setMenuDismissed] = useState(false);
   const [mode, setMode] = useState<"reply" | "note">("reply");
   const taRef = useRef<HTMLTextAreaElement | null>(null);
@@ -286,6 +288,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
               disabled={respostaBarrada}
               onPick={setPendingFile}
               onPickContact={() => setContactPickerOpen(true)}
+              onScheduleMessage={currentContactId ? () => setScheduleDialogOpen(true) : undefined}
             />
           )}
           {mode === "reply" && (
@@ -437,6 +440,15 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
           );
         }}
       />
+      {currentContactId && (
+        <ScheduleMessageDialog
+          open={scheduleDialogOpen}
+          onOpenChange={setScheduleDialogOpen}
+          contactId={currentContactId}
+          conversationId={conversationId}
+          contactName={contactName}
+        />
+      )}
     </>
   );
 });

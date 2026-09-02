@@ -83,6 +83,14 @@ Detalham schema SQL e payloads exatos. **Consulte antes de modelar qualquer cois
 
 | Doc | Conteúdo |
 |---|---|
+| [`ARQUITETURA_WAHA.md`](ARQUITETURA_WAHA.md) | **Arquitetura WAHA** — integração HTTP REST, engine NOWEB, sessões e webhooks |
+| [`ARQUITETURA_GOWA.md`](ARQUITETURA_GOWA.md) | **Arquitetura GOWA** — integração Go WhatsApp Web MultiDevice, sessões e webhooks |
+| [`ARQUITETURA_FOTOS_PERFIL.md`](ARQUITETURA_FOTOS_PERFIL.md) | **Sincronização de Fotos de Perfil** — ciclo de vida, WAHA/GOWA, bucket `whatsapp-media` e LGPD |
+| [`ARQUITETURA_MIDIAS_INBOUND_STORAGE.md`](ARQUITETURA_MIDIAS_INBOUND_STORAGE.md) | **Persistência de Mídias Inbound (Supabase Storage)** — áudios, imagens, vídeos, documentos, streaming resiliente e persistência oportunista |
+| [`ARQUITETURA_MENSAGENS_AGENDADAS.md`](ARQUITETURA_MENSAGENS_AGENDADAS.md) | **Mensagens Agendadas** — ciclo de vida, tabela `scheduled_messages`, placeholders dinâmicos, scheduler worker e UI |
+| [`ARQUITETURA_FUSO_E_FORMATO_HORA.md`](ARQUITETURA_FUSO_E_FORMATO_HORA.md) | **Fuso Horário & Formato de Hora (24h / 12h)** — fusos regionais (Campo Grande/MS), preferências do perfil e propagação global |
+| [`ARQUITETURA_ASSINATURA_CONVERSA.md`](ARQUITETURA_ASSINATURA_CONVERSA.md) | **Assinatura na Conversa** — identificação de atendente humano nas bolhas do WhatsApp (`*{assinatura}:*`), isolamento de IA e perfil |
+| [`ARQUITETURA_NOME_VS_DISPLAY_NAME.md`](ARQUITETURA_NOME_VS_DISPLAY_NAME.md) | **Nome vs Display Name** — precedência do nome verificado no CRM (`name`) sobre pushName do WhatsApp (`display_name`) e sincronização |
 | [`doctrine/sistema-vivo.md`](doctrine/sistema-vivo.md) | **Doutrina do Sistema Vivo — a LEI.** 7 invariantes + regra do tempo + Living System Checklist (item 13 do DoD) |
 | [`doctrine/sistema-vivo/`](doctrine/sistema-vivo/README.md) | **Manual do Sistema Vivo** — 8 capítulos plugáveis (princípio universal + aplicação de referência). O *porquê* de cada invariante, e como adotar a doutrina em outro sistema |
 | [`doctrine/restricao-de-canal.md`](doctrine/restricao-de-canal.md) | Auto-restrição × hetero-restrição de canais externos; contrato de parâmetros derivado |
@@ -144,6 +152,7 @@ Documentação de *processo*. Alta rotatividade; trate como estado, não como co
 **encerrado** é arquivado em [`handoffs/`](handoffs/). Use isso para saber o que está em voo.
 
 - **Raiz (em voo):** `HANDOFF.md` (follow-up), `HANDOFF-harness-evolution.md`, `HANDOFF-operacao-visivel.md`
+- [`walkthrough/`](walkthrough/) — relatórios e resumos de entrega por feature/épico ([`README.md`](walkthrough/README.md))
 - [`handoffs/`](handoffs/) — arquivados: casos humanos, inbox multimodal, CRM vivo, LGPD, wave1-devvivo, contrato wave5, briefing CRM vivo
 - [`stories/`](stories/) — épicos e stories (`epics/MASTER.md` = plano por epic/wave)
 - [`superpowers/`](superpowers/) — `plans/` e `specs/` datados por onda, mais `handoffs/`

@@ -87,10 +87,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         "id, organization_id, waha_session_name, webhook_secret_encrypted, status, is_warmup_complete, warmup_started_at",
       )
       .eq("waha_session_name", sessionName);
-  let { data: session, error: sessErr } = await queryTolerantToMissingArchived(
+  const { data: initialSession, error: sessErr } = await queryTolerantToMissingArchived(
     () => base().is(ARCHIVED_AT, null).maybeSingle(),
     () => base().maybeSingle(),
   );
+  let session = initialSession;
 
   // Fallback: se não encontrou por waha_session_name exato, busca se há uma única sessão WAHA ativa
   if (!session) {

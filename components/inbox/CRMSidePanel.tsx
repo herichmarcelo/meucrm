@@ -15,6 +15,7 @@ import type { ConversationWithContact } from "@/hooks/inbox/useConversationsReal
 import { activityLabel, actorLabel, actorShape } from "@/lib/leads/activity-vocabulary";
 import { ConversationTagsEditor } from "./ConversationTagsEditor";
 import { ContactTagsEditor } from "./ContactTagsEditor";
+import { ScheduledMessagesSection } from "./ScheduledMessagesSection";
 import { useDefaultPipeline } from "@/hooks/pipelines/useDefaultPipeline";
 import { NewLeadDialog } from "@/components/kanban/NewLeadDialog";
 import { cn } from "@/lib/utils";
@@ -459,6 +460,17 @@ export function CRMSidePanel({ conversation }: Props) {
           />
         )}
       </section>
+
+      {contactId && (
+        <>
+          <Separator />
+          <ScheduledMessagesSection
+            contactId={contactId}
+            conversationId={conversation?.id}
+            contactName={displayName}
+          />
+        </>
+      )}
 
       <Separator />
 

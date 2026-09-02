@@ -188,14 +188,64 @@ function previewFromMessage(p: WahaPayload): string {
   return t !== "text" ? `[${t}]` : "";
 }
 
-/** URL da mídia: WAHA novo (payload.media.url) com fallback legado (payload.mediaUrl). */
+/** URL da mídia: WAHA novo (payload.media.url) com fallback legado (payload.mediaUrl e _data). */
 export function mediaUrlOf(p: WahaPayload): string | null {
-  return p.mediaUrl ?? p.media?.url ?? null;
+  const direct = p.mediaUrl ?? p.media?.url ?? null;
+  if (direct) return direct;
+
+  const raw = p as Record<string, unknown>;
+  if (typeof raw.media_url === "string" && raw.media_url) return raw.media_url;
+  if (typeof raw.url === "string" && raw.url) return raw.url;
+  if (typeof raw.image_url === "string" && raw.image_url) return raw.image_url;
+  if (typeof raw.audio_url === "string" && raw.audio_url) return raw.audio_url;
+  if (typeof raw.file_url === "string" && raw.file_url) return raw.file_url;
+
+  const d = p._data as Record<string, unknown> | null | undefined;
+  if (d) {
+    if (typeof d.mediaUrl === "string" && d.mediaUrl) return d.mediaUrl;
+    if (typeof (d.media as Record<string, unknown>)?.url === "string") {
+      return (d.media as Record<string, unknown>).url as string;
+    }
+    const msg = d.message as Record<string, unknown> | null | undefined;
+    if (msg) {
+      for (const k of ["imageMessage", "audioMessage", "videoMessage", "documentMessage", "stickerMessage", "ptvMessage"]) {
+        const item = msg[k] as Record<string, unknown> | null | undefined;
+        if (item) {
+          if (typeof item.url === "string" && item.url) return item.url;
+          if (typeof item.directPath === "string" && item.directPath) return item.directPath;
+        }
+      }
+    }
+  }
+
+  if (p.hasMedia && p.id) {
+    return `/api/files/${encodeURIComponent(p.id)}`;
+  }
+
+  return null;
 }
 
 /** MIME da mídia: idem (payload.media.mimetype é o campo do NOWEB atual). */
 export function mediaMimeOf(p: WahaPayload): string | null {
-  return p.mimetype ?? p.media?.mimetype ?? null;
+  if (p.mimetype) return p.mimetype;
+  if (p.media?.mimetype) return p.media.mimetype;
+
+  const raw = p as Record<string, unknown>;
+  if (typeof raw.mime_type === "string" && raw.mime_type) return raw.mime_type;
+  if (typeof raw.mimetype === "string" && raw.mimetype) return raw.mimetype;
+
+  const d = p._data as Record<string, unknown> | null | undefined;
+  if (d) {
+    const msg = d.message as Record<string, unknown> | null | undefined;
+    if (msg) {
+      for (const k of ["imageMessage", "audioMessage", "videoMessage", "documentMessage", "stickerMessage", "ptvMessage"]) {
+        const item = msg[k] as Record<string, unknown> | null | undefined;
+        if (item && typeof item.mimetype === "string" && item.mimetype) return item.mimetype;
+      }
+    }
+  }
+
+  return null;
 }
 
 /**

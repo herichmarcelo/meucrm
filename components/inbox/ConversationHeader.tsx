@@ -4,6 +4,7 @@ import { useT } from "@/hooks/i18n/useT";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { JanelaSelo } from "@/components/inbox/JanelaSelo";
 import { Phone, ArrowRight } from "@/lib/ui/icons";
 import { useAuth } from "@/hooks/auth/AuthProvider";
@@ -18,6 +19,17 @@ import { rotuloDoContato } from "@/lib/contacts/rotulo-do-contato";
 
 interface Props {
   conversation: ConversationWithContact;
+}
+
+function initials(name: string | null | undefined, fallback: string): string {
+  const v = (name ?? "").trim();
+  if (!v) return fallback.slice(0, 2).toUpperCase();
+  const parts = v.split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return fallback.slice(0, 2).toUpperCase();
+  if (parts.length === 1) return (parts[0] ?? "").slice(0, 2).toUpperCase();
+  const first = parts[0]?.[0] ?? "";
+  const last = parts[parts.length - 1]?.[0] ?? "";
+  return (first + last).toUpperCase();
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -75,33 +87,47 @@ export function ConversationHeader({ conversation }: Props) {
     // Nenhuma ação some — um menu "mais" esconderia o "Lembrar" que a spec
     // `canais-baseline` clica, e, pior, esconderia ação de quem atende.
     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-background px-4 py-3">
-      <div className="min-w-0">
-        <div className="flex items-center gap-2">
-          <h2 className="truncate text-sm font-semibold">{displayName}</h2>
-          <Badge variant="outline" className="h-4 px-1.5 text-[10px]">
-            {t(STATUS_LABEL[status] ?? status)}
-          </Badge>
-          {/* Ao lado do estado, não escondido num painel: a pergunta "dá para
-              escrever agora?" se faz ANTES de digitar, não depois de receber um
-              `failed` com um código de cinco dígitos. */}
-          <JanelaSelo
-            provider={conversation.channel_sessions?.provider ?? null}
-            lastInboundAt={conversation.last_inbound_at}
-          />
-          {/* Sem esta marca, a conversa em que o robô está calado tem exatamente
-              a mesma cara de uma conversa normal — e ninguém entende por que as
-              respostas automáticas pararam. */}
-          {emAtendimentoHumano && (
-            <Badge variant="outline" className="h-4 px-1.5 text-[10px]" data-testid="badge-atendimento-humano">
-              Automático pausado
+      <div className="flex min-w-0 items-center gap-3">
+        {c?.id && (
+          <Avatar className="h-10 w-10 shrink-0">
+            <AvatarImage
+              src={`/api/v1/contacts/${c.id}/avatar`}
+              alt=""
+              className="object-cover"
+            />
+            <AvatarFallback className="text-xs font-semibold">
+              {initials(displayName, phone ?? "WA")}
+            </AvatarFallback>
+          </Avatar>
+        )}
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <h2 className="truncate text-sm font-semibold">{displayName}</h2>
+            <Badge variant="outline" className="h-4 px-1.5 text-[10px]">
+              {t(STATUS_LABEL[status] ?? status)}
             </Badge>
+            {/* Ao lado do estado, não escondido num painel: a pergunta "dá para
+                escrever agora?" se faz ANTES de digitar, não depois de receber um
+                `failed` com um código de cinco dígitos. */}
+            <JanelaSelo
+              provider={conversation.channel_sessions?.provider ?? null}
+              lastInboundAt={conversation.last_inbound_at}
+            />
+            {/* Sem esta marca, a conversa em que o robô está calado tem exatamente
+                a mesma cara de uma conversa normal — e ninguém entende por que as
+                respostas automáticas pararam. */}
+            {emAtendimentoHumano && (
+              <Badge variant="outline" className="h-4 px-1.5 text-[10px]" data-testid="badge-atendimento-humano">
+                Automático pausado
+              </Badge>
+            )}
+          </div>
+          {phone && (
+            <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
+              <Phone size={11} weight="regular" aria-hidden /> {phone}
+            </p>
           )}
         </div>
-        {phone && (
-          <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
-            <Phone size={11} weight="regular" aria-hidden /> {phone}
-          </p>
-        )}
       </div>
 
       {/* `shrink-0` saiu daqui: era ele que impunha o piso de largura. Agora a

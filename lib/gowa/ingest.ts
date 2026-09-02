@@ -304,6 +304,23 @@ export async function dispatchGowaEvent(
   const preview = messageText.slice(0, 280) || (msgType !== "text" ? `[${msgType}]` : "");
   await markConversation(admin, conversationId, "inbound", preview, now);
 
+  // Emite evento de persistência no bucket caso a mensagem contenha mídia
+  if (insertedMsg?.id && (mediaUrl || hasMedia)) {
+    const inboundMessageId = insertedMsg.id;
+    admin
+      .rpc("emit_event" as never, {
+        p_event_type: "media.persist_requested",
+        p_entity_kind: "message",
+        p_entity_id: inboundMessageId,
+        p_payload: { message_id: inboundMessageId, conversation_id: conversationId },
+        p_metadata: { source: "gowa_webhook", request_id: requestId },
+        p_organization_id: session.organization_id,
+      } as never)
+      .then(({ error }: { error: { message: string } | null }) => {
+        if (error) logger.warn("[gowa.ingest] emit media.persist_requested failed", { error: error.message });
+      });
+  }
+
   // Gatilhos de automação pós-entrada (LGPD opt-out, Leads e IA)
   await aplicarEfeitosPosEntrada(admin, {
     organizationId: session.organization_id,

@@ -22,14 +22,28 @@ export async function fetchWahaMedia(
   hintMime?: string | null,
 ): Promise<FetchedMedia> {
   const base = process.env.WAHA_API_BASE_URL;
-  let url: URL;
-  try {
-    const advertised = new URL(mediaUrl);
-    // Host/porta descartados: só path+query sobrevivem, resolvidos na base.
-    url = new URL(advertised.pathname + advertised.search, base ?? "");
-  } catch {
-    throw new Error("waha_media_untrusted_host");
+  if (!base) throw new Error("waha_api_base_url_not_configured");
+
+  let pathAndQuery: string;
+  if (mediaUrl.startsWith("http://") || mediaUrl.startsWith("https://")) {
+    try {
+      const advertised = new URL(mediaUrl);
+      pathAndQuery = advertised.pathname + advertised.search;
+    } catch {
+      throw new Error("waha_media_untrusted_host");
+    }
+  } else if (mediaUrl.startsWith("/")) {
+    pathAndQuery = mediaUrl;
+  } else {
+    try {
+      const advertised = new URL(mediaUrl);
+      pathAndQuery = advertised.pathname + advertised.search;
+    } catch {
+      throw new Error("waha_media_untrusted_host");
+    }
   }
+
+  const url = new URL(pathAndQuery, base);
 
   const apiKey = process.env.WAHA_API_KEY;
   const res = await fetch(url.toString(), {

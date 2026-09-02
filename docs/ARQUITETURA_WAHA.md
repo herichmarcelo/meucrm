@@ -220,3 +220,13 @@ O CRM implementa isolamento multi-tenant rigoroso em todas as camadas:
   Isso instrui o WAHA a não processar e nem armazenar status, listas de transmissão e grupos, economizando CPU, rede e volume no banco de dados.
 * **Persistência de Sessões:** O diretório `/app/.sessions` deve sempre estar montado em um volume persistente do Docker para evitar perda de pareamento após reinicializações.
 * **Limites de Memória:** Embora o engine `NOWEB` seja leve (~100MB por sessão), configure `mem_limit` no Docker Compose para evitar picos sob tráfego severo de mídia.
+
+---
+
+## 8. Sincronização de Fotos de Perfil (Avatares)
+
+* **Consulta Upstream:** `GET /api/contacts/profile-picture?session={session}&contactId={chatId}` via `WahaClient.getProfilePictureUrl()`.
+* **Persistência em Bucket Privado:** O link da CDN do WhatsApp expira em ~9 dias (`&oe=...`). O arquivo é baixado e salvo no Supabase Storage no bucket `whatsapp-media` em `{org_id}/avatars/{contact_id}.jpg`.
+* **Desacoplamento e LGPD:** A sincronização roda via cron (`app/api/v1/cron/contact-avatars/route.ts`) ou sob demanda. Ao anonimizar o contato por LGPD, o arquivo é removido do storage via `storage_redaction_queue`.
+* **Documentação Completa:** Detalhes em [`docs/ARQUITETURA_FOTOS_PERFIL.md`](ARQUITETURA_FOTOS_PERFIL.md).
+

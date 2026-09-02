@@ -5,9 +5,6 @@ export const dynamic = "force-dynamic";
 
 export default async function ProfilePage() {
   const user = await requireAuth();
-  const meta = (user as unknown as { full_name: string | null; avatar_url: string | null });
-  // Read locale/timezone from raw user meta if present (loadAuthUser doesn't include them).
-  // We pass safe defaults that the form re-syncs on submit.
   return (
     <div className="flex h-full flex-col gap-6 p-6">
       <header>
@@ -18,8 +15,12 @@ export default async function ProfilePage() {
       </header>
       <ProfileForm
         email={user.email}
-        initialFullName={meta.full_name}
-        initialAvatarUrl={meta.avatar_url}
+        initialFullName={user.full_name}
+        initialAvatarUrl={user.avatar_url}
+        initialLocale={user.locale}
+        initialTimezone={user.timezone}
+        initialTimeFormat={user.time_format}
+        initialSignature={user.signature}
       />
     </div>
   );

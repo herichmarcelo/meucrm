@@ -271,5 +271,13 @@ Para atender às necessidades de empresas com múltiplos setores ou equipes come
 3. **Persistência e APIs:**
    - `POST /api/v1/channel-sessions`: aceita `{ "display_name": "VENDEDORES", "provider": "gowa" }`.
    - `PATCH /api/v1/channel-sessions/[id]`: permite renomear a instância a qualquer momento `{ "display_name": "NOVO_NOME" }`.
-   - Na listagem de conexões e na Central de Atendimento, o sistema exibe o nome customizado destacado junto ao número (ex: `VENDEDORES (+55 45 8820-6525)`).
+    - Na listagem de conexões e na Central de Atendimento, o sistema exibe o nome customizado destacado junto ao número (ex: `VENDEDORES (+55 45 8820-6525)`).
 
+---
+
+## 9. Sincronização de Fotos de Perfil (Avatares)
+
+* **Consulta Upstream:** `GET /user/avatar?phone={phone}` (com headers `Authorization: Basic ...` e `X-Device-Id: {deviceId}`) via `GowaClient.fetchProfilePictureUrl()`.
+* **Persistência em Bucket Privado:** O arquivo binário retornado (ou baixado via link temporário) é salvo no Supabase Storage no bucket `whatsapp-media` em `{org_id}/avatars/{contact_id}.jpg` com `upsert: true`.
+* **Desacoplamento e LGPD:** A sincronização roda via cron (`app/api/v1/cron/contact-avatars/route.ts`) ou sob demanda. Ao anonimizar o contato por LGPD, o arquivo é removido do storage via `storage_redaction_queue`.
+* **Documentação Completa:** Detalhes em [`docs/ARQUITETURA_FOTOS_PERFIL.md`](ARQUITETURA_FOTOS_PERFIL.md).

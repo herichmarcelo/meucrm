@@ -65,6 +65,12 @@ export interface AuthUser {
    * e trocar para espanhol meio segundo depois, em toda navegação.
    */
   locale?: string | null;
+  /** Fuso horário configurado pelo usuário em user_metadata.timezone. */
+  timezone?: string | null;
+  /** Formato de hora (24h vs 12h AM/PM) em user_metadata.time_format. */
+  time_format?: "24h" | "12h" | null;
+  /** Assinatura na conversa em user_metadata.signature (ex.: "Herich M."). */
+  signature?: string | null;
   organizations: UserOrgMembership[];
 }
 

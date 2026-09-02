@@ -79,6 +79,7 @@ const KNOWN_DEBT: { reason: string; files: string[] }[] = [
       "app/api/v1/onboarding/whatsapp/qr/route.ts",
       "app/api/v1/onboarding/whatsapp/session/route.ts",
       "app/api/v1/webhooks/gowa/[token]/route.ts",
+      "app/api/v1/webhooks/gowa/route.ts",
       "app/api/v1/webhooks/waha/[token]/route.ts",
       "app/api/v1/webhooks/waha/route.ts",
       // (#118) Lê `process.env.WAHA_API_BASE_URL`/`WAHA_API_KEY` só para
@@ -129,11 +130,11 @@ const KNOWN_DEBT: { reason: string; files: string[] }[] = [
       "alias por 3 arquivos sem tirar o nome de lugar nenhum.",
     files: [
       "app/api/v1/ai/pacing/route.ts",
-      "app/api/v1/cron/contact-avatars/route.ts",
       // `components/connections/AntiBanSheet.tsx` SAIU desta lista: ele lia
       // `waha_session_name` como último degrau do NOME que o usuário vê, e por
       // isso um canal sem apelido aparecia no painel como `org_2dd5e6ea`. Agora
       // usa `nomeDoCanal`, que não conhece provedor nenhum. A catraca só encolhe.
+      // `app/api/v1/cron/contact-avatars/route.ts` SAIU: agora usa CHANNEL_SESSION_REF_COLUMNS.
     ],
   },
   {

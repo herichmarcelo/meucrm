@@ -18,6 +18,7 @@ import type { NextRequest } from "next/server";
 
 import { fail } from "@/lib/api/wrappers";
 import { loadAuthUser, resolveActiveOrg } from "@/lib/auth/server";
+import { syncContactAvatar } from "@/lib/contacts/avatar-sync";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -62,13 +63,51 @@ export async function GET(
   // da sessão, nunca do path (doutrina do CLAUDE.md).
   const { data: contato } = await admin
     .from("contacts")
-    .select("avatar_storage_path, is_anonymized")
+    .select("id, avatar_storage_path, avatar_updated_at, is_anonymized, wa_identity, phone_number")
     .eq("id", id)
     .eq("organization_id", activeOrg.orgId)
     .maybeSingle();
 
-  const row = contato as { avatar_storage_path?: string | null; is_anonymized?: boolean } | null;
-  if (!row?.avatar_storage_path || row.is_anonymized) {
+  const row = contato as {
+    id: string;
+    avatar_storage_path?: string | null;
+    avatar_updated_at?: string | null;
+    is_anonymized?: boolean;
+    wa_identity?: string | null;
+    phone_number?: string | null;
+  } | null;
+
+  if (!row || row.is_anonymized) {
+    return new Response(null, { status: 404 });
+  }
+
+  let storagePath = row.avatar_storage_path;
+
+  // Busca oportunista: se o contato não tem foto gravada e ainda não foi tentado,
+  // tenta consultar o WhatsApp imediatamente para exibir o avatar na primeira carga.
+  if (!storagePath && !row.avatar_updated_at) {
+    try {
+      const syncRes = await syncContactAvatar({
+        organizationId: activeOrg.orgId,
+        contactId: row.id,
+        contact: {
+          id: row.id,
+          organization_id: activeOrg.orgId,
+          wa_identity: row.wa_identity ?? null,
+          phone_number: row.phone_number ?? null,
+          is_anonymized: false,
+        },
+        adminClient: admin,
+      });
+      if (syncRes.success && syncRes.path) {
+        storagePath = syncRes.path;
+      }
+    } catch {
+      // Falhas no sync caem no 404 sem quebrar o endpoint
+    }
+  }
+
+  if (!storagePath) {
     // 404 e não erro: "sem foto" é o estado normal da maioria dos contatos, e o
     // <AvatarFallback> das iniciais assume sozinho.
     return new Response(null, { status: 404 });
@@ -76,7 +115,7 @@ export async function GET(
 
   const { data: signed, error } = await admin.storage
     .from("whatsapp-media")
-    .createSignedUrl(row.avatar_storage_path, SIGNED_TTL_SECONDS);
+    .createSignedUrl(storagePath, SIGNED_TTL_SECONDS);
 
   if (error || !signed?.signedUrl) {
     return new Response(null, { status: 404 });

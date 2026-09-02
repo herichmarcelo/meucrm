@@ -168,6 +168,9 @@ export async function loadAuthUser(): Promise<AuthUser | null> {
   const fullName = (user.user_metadata?.full_name as string | undefined) ?? null;
   const avatarUrl = (user.user_metadata?.avatar_url as string | undefined) ?? null;
   const locale = (user.user_metadata?.locale as string | undefined) ?? null;
+  const timezone = (user.user_metadata?.timezone as string | undefined) ?? null;
+  const timeFormat = (user.user_metadata?.time_format as "24h" | "12h" | undefined) ?? null;
+  const signature = (user.user_metadata?.signature as string | undefined) ?? null;
 
   return {
     id: user.id,
@@ -176,6 +179,9 @@ export async function loadAuthUser(): Promise<AuthUser | null> {
     avatar_url: avatarUrl,
     is_platform_admin: !!paRow,
     locale,
+    timezone,
+    time_format: timeFormat,
+    signature,
     organizations: memberships,
   };
 }

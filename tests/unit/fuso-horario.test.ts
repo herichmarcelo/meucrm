@@ -67,6 +67,10 @@ describe("todo fuso oferecido é utilizável", () => {
   it("Assunção está na lista — é o fuso deste país", () => {
     expect(FUSOS_OFERECIDOS.map((f) => f.codigo)).toContain("America/Asuncion");
   });
+
+  it("Campo Grande está na lista — fuso de Mato Grosso do Sul", () => {
+    expect(FUSOS_OFERECIDOS.map((f) => f.codigo)).toContain("America/Campo_Grande");
+  });
 });
 
 describe("a agenda do atendente rejeita fuso inválido", () => {
@@ -103,6 +107,11 @@ describe("as telas OFERECEM em vez de pedir para digitar", () => {
 
   it("e a agenda do atendente", () => {
     const fonte = readFileSync("app/app/team/_components/AttendantsClient.tsx", "utf8");
+    expect(fonte).toMatch(/FUSOS_OFERECIDOS\.map/);
+  });
+
+  it("e o formulário de perfil de usuário", () => {
+    const fonte = readFileSync("app/app/settings/profile/_form.tsx", "utf8");
     expect(fonte).toMatch(/FUSOS_OFERECIDOS\.map/);
   });
 });

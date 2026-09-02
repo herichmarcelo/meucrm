@@ -21,6 +21,7 @@ import {
 } from "@/components/app/ImpersonateBanner";
 import { ConexaoCaidaBanner } from "@/components/app/ConexaoCaidaBanner";
 import { IdiomaProvider } from "@/lib/i18n/IdiomaProvider";
+import { TempoProvider } from "@/lib/tempo/TempoProvider";
 import { listarConexoesCaidas, type ConexaoCaida } from "@/lib/channels/health";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -161,6 +162,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     // pergunta quem está logado. Ver `lib/i18n/IdiomaProvider`: foi o
     // acoplamento com a autenticação que derrubou 32 casos.
     <IdiomaProvider locale={user.locale}>
+    <TempoProvider timezone={user.timezone} timeFormat={user.time_format}>
     <AuthProvider user={user} activeOrg={activeOrg}>
       {/*
         O MARCADOR da marca da organização — o elemento cuja existência define o
@@ -191,6 +193,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         )}
       </div>
     </AuthProvider>
+    </TempoProvider>
     </IdiomaProvider>
   );
 }

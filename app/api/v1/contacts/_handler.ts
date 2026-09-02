@@ -335,7 +335,7 @@ export async function createContactHandler(
     organization_id: ctx.organization_id,
     created_by_user_id: ctx.actor.type === "user" ? ctx.actor.id : null,
     name: input.name ?? null,
-    display_name: input.display_name ?? null,
+    display_name: input.display_name ?? input.name ?? null,
     email: input.email ?? null,
     phone_number: input.phone_number ?? null,
     birthdate: input.birthdate ?? null,
@@ -434,7 +434,14 @@ export async function patchContactHandler(
   }
 
   const patch: Record<string, unknown> = {};
-  if (input.name !== undefined) patch.name = input.name;
+  if (input.name !== undefined) {
+    patch.name = input.name;
+    // Ao atualizar o nome do contato, se nenhum display_name foi explicitamente passado,
+    // sincroniza display_name para acompanhar o nome preenchido no CRM.
+    if (input.display_name === undefined) {
+      patch.display_name = input.name;
+    }
+  }
   if (input.display_name !== undefined) patch.display_name = input.display_name;
   // `email_normalized` NÃO entra no patch — é `GENERATED ALWAYS AS
   // (lower(trim(email))) STORED` (baseline.sql:1349), e o Postgres RECUSA

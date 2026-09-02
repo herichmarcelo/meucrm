@@ -14,27 +14,33 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { updateProfile } from "@/app/actions/settings/updateProfile";
-import { profileSchema, type Locale } from "@/lib/schemas/settings";
-
-const TIMEZONES = [
-  "America/Sao_Paulo",
-  "America/Manaus",
-  "America/Belem",
-  "America/Recife",
-  "America/Fortaleza",
-  "UTC",
-];
+import { profileSchema, type Locale, type TimeFormat } from "@/lib/schemas/settings";
+import { FUSOS_OFERECIDOS } from "@/lib/tempo/fusos";
 
 interface Props {
   email: string;
   initialFullName: string | null;
   initialAvatarUrl: string | null;
+  initialLocale?: string | null;
+  initialTimezone?: string | null;
+  initialTimeFormat?: "24h" | "12h" | null;
+  initialSignature?: string | null;
 }
 
-export function ProfileForm({ email, initialFullName, initialAvatarUrl }: Props) {
+export function ProfileForm({
+  email,
+  initialFullName,
+  initialAvatarUrl,
+  initialLocale,
+  initialTimezone,
+  initialTimeFormat,
+  initialSignature,
+}: Props) {
   const [fullName, setFullName] = useState(initialFullName ?? "");
-  const [locale, setLocale] = useState<Locale>("pt-BR");
-  const [timezone, setTimezone] = useState("America/Sao_Paulo");
+  const [locale, setLocale] = useState<Locale>((initialLocale as Locale) || "pt-BR");
+  const [timezone, setTimezone] = useState(initialTimezone || "America/Sao_Paulo");
+  const [timeFormat, setTimeFormat] = useState<TimeFormat>(initialTimeFormat || "24h");
+  const [signature, setSignature] = useState(initialSignature ?? "");
   const [avatarUrl, setAvatarUrl] = useState(initialAvatarUrl ?? "");
   const [isPending, startTransition] = useTransition();
 
@@ -44,6 +50,8 @@ export function ProfileForm({ email, initialFullName, initialAvatarUrl }: Props)
       full_name: fullName || null,
       locale,
       timezone,
+      time_format: timeFormat,
+      signature: signature || null,
       avatar_url: avatarUrl || null,
     });
     if (!parsed.success) {
@@ -52,7 +60,7 @@ export function ProfileForm({ email, initialFullName, initialAvatarUrl }: Props)
     }
     startTransition(async () => {
       const r = await updateProfile(parsed.data);
-      if (r.ok) toast.success("Perfil atualizado.");
+      if (r.ok) toast.success("Perfil atualizado com sucesso.");
       else toast.error(`Erro: ${r.error}`);
     });
   }
@@ -76,6 +84,19 @@ export function ProfileForm({ email, initialFullName, initialAvatarUrl }: Props)
             maxLength={120}
           />
         </div>
+        <div className="space-y-2">
+          <Label htmlFor="signature">Assinatura na conversa</Label>
+          <Input
+            id="signature"
+            placeholder="ex: Herich M."
+            value={signature}
+            onChange={(e) => setSignature(e.target.value)}
+            maxLength={100}
+          />
+          <p className="text-xs text-muted-foreground">
+            Se preenchido, seu nome aparece no início de cada mensagem que você enviar nas conversas, para identificar qual atendente respondeu.
+          </p>
+        </div>
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label htmlFor="locale">Idioma</Label>
@@ -85,11 +106,6 @@ export function ProfileForm({ email, initialFullName, initialAvatarUrl }: Props)
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="pt-BR">Português (BR)</SelectItem>
-                {/* Espanhol entrou quando passou a MUDAR alguma coisa. Enquanto
-                    o campo era guardado e ninguém o lia, oferecer um idioma a
-                    mais era prometer o que a tela não cumpre — e o operador
-                    conclui que o sistema está quebrado.
-                    `en-US` saiu pela mesma razão: nunca teve tradução. */}
                 <SelectItem value="es">Español</SelectItem>
               </SelectContent>
             </Select>
@@ -100,16 +116,33 @@ export function ProfileForm({ email, initialFullName, initialAvatarUrl }: Props)
               <SelectTrigger id="timezone">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
-                {TIMEZONES.map((tz) => (
-                  <SelectItem key={tz} value={tz}>
-                    {tz}
+              <SelectContent className="max-h-72">
+                {FUSOS_OFERECIDOS.map((f) => (
+                  <SelectItem key={f.codigo} value={f.codigo}>
+                    {f.rotulo}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
         </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="time_format">Formato de hora no sistema</Label>
+          <Select value={timeFormat} onValueChange={(v) => setTimeFormat(v as TimeFormat)}>
+            <SelectTrigger id="time_format">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="24h">24 horas — ex: 14:30 (Padrão)</SelectItem>
+              <SelectItem value="12h">12 horas — ex: 02:30 PM (AM / PM)</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            Define como os horários das mensagens, agendamentos e atividades serão exibidos para você.
+          </p>
+        </div>
+
         <div className="space-y-2">
           <Label htmlFor="avatar_url">Avatar URL</Label>
           <Input

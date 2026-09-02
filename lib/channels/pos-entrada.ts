@@ -39,6 +39,7 @@
  * dentro, com log, e o seguinte roda mesmo assim.
  */
 import { audit } from "@/lib/audit";
+import { syncContactAvatar } from "@/lib/contacts/avatar-sync";
 import { garantirLeadDaConversa } from "@/lib/leads/nascimento-do-lead";
 import { logger } from "@/lib/logger";
 import type { createAdminClient } from "@/lib/supabase/admin";
@@ -103,7 +104,7 @@ export interface EntradaDeMensagem {
 }
 
 /**
- * Roda os três efeitos, em ordem, para uma mensagem de ENTRADA recém-gravada.
+ * Roda os efeitos pós-entrada, em ordem, para uma mensagem de ENTRADA recém-gravada.
  *
  * Só para `inbound`: um envio nosso (ou feito do celular do operador) não pede
  * para sair, não abre demanda e não acorda o agente.
@@ -115,6 +116,27 @@ export async function aplicarEfeitosPosEntrada(
   await aplicarOptOut(admin, entrada);
   await abrirDemanda(admin, entrada);
   await pedirDespachoDoAgente(admin, entrada);
+  sincronizarFotoDePerfil(admin, entrada);
+}
+
+/**
+ * 4 · Sincroniza a foto de perfil do contato em segundo plano.
+ *
+ * Dispara de forma assíncrona (não-bloqueante): a foto é persistida no bucket
+ * `whatsapp-media` e vinculada ao contato sem atrasar a resposta da mensagem.
+ */
+function sincronizarFotoDePerfil(admin: Admin, entrada: EntradaDeMensagem): void {
+  syncContactAvatar({
+    organizationId: entrada.organizationId,
+    contactId: entrada.contactId,
+    adminClient: admin,
+  }).catch((err) => {
+    logger.warn("pos-entrada: syncContactAvatar assíncrono falhou", {
+      organization_id: entrada.organizationId,
+      contact_id: entrada.contactId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  });
 }
 
 /**

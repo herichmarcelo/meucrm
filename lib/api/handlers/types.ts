@@ -7,7 +7,7 @@
  */
 
 export type Actor =
-  | { type: "user"; id: string; role?: string }
+  | { type: "user"; id: string; role?: string; signature?: string | null }
   /**
    * ⚠️ `id` E `agent_id` NÃO SÃO A MESMA COISA, e confundi-los custa a atividade.
    *

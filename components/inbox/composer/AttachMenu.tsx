@@ -3,16 +3,17 @@ import { useRef } from "react";
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
-import { FileText, ImageSquare, Plus, UserCircle } from "@/lib/ui/icons";
+import { Clock, FileText, ImageSquare, Plus, UserCircle } from "@/lib/ui/icons";
 
 interface Props {
   disabled?: boolean;
   onPick: (file: File) => void;
   onPickContact?: () => void;
+  onScheduleMessage?: () => void;
 }
 
-/** Menu "+" do composer (padrão WhatsApp): Fotos e vídeos / Documento / Contato. */
-export function AttachMenu({ disabled, onPick, onPickContact }: Props) {
+/** Menu "+" do composer (padrão WhatsApp): Fotos e vídeos / Documento / Contato / Agendar mensagem. */
+export function AttachMenu({ disabled, onPick, onPickContact, onScheduleMessage }: Props) {
   const mediaRef = useRef<HTMLInputElement | null>(null);
   const docRef = useRef<HTMLInputElement | null>(null);
 
@@ -62,6 +63,16 @@ export function AttachMenu({ disabled, onPick, onPickContact }: Props) {
             >
               <UserCircle size={18} weight="duotone" className="text-primary" aria-hidden />
               Contato
+            </button>
+          )}
+          {onScheduleMessage && (
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm hover:bg-muted"
+              onClick={onScheduleMessage}
+            >
+              <Clock size={18} weight="duotone" className="text-primary" aria-hidden />
+              Agendar mensagem
             </button>
           )}
         </PopoverContent>

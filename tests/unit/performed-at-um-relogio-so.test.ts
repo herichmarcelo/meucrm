@@ -47,24 +47,20 @@ const PASTAS = ["lib", "app", "hooks", "components"];
  */
 const MARCAS = ["crm_lead_activities", "emitLeadActivity", "buildLeadActivityRow"];
 
+import { arquivosDeCodigo } from "./helpers/varrer-codigo";
+
 function arquivosQueEscrevemAtividade(): string[] {
+  const todos = arquivosDeCodigo(PASTAS);
   const achados = new Set<string>();
-  for (const marca of MARCAS) {
-    let saida = "";
+  for (const abs of todos) {
     try {
-      saida = execFileSync(
-        "grep",
-        ["-rl", "--include=*.ts", "--include=*.tsx", marca, ...PASTAS],
-        { cwd: RAIZ, encoding: "utf8" },
-      );
+      const conteudo = readFileSync(abs, "utf8");
+      if (MARCAS.some((m) => conteudo.includes(m))) {
+        achados.add(path.relative(RAIZ, abs).replace(/\\/g, "/"));
+      }
     } catch {
-      // `grep` sai com 1 quando não acha nada, e o `execFileSync` LANÇA. Sem
-      // este catch, a sabotagem da varredura vazia derrubava o arquivo inteiro
-      // com "Command failed" e nem chegava na guarda — o teste não passava por
-      // vacuidade, ele simplesmente NÃO RODAVA, que é igualmente cego.
-      saida = "";
+      // ignora erro de leitura
     }
-    for (const a of saida.split("\n").filter(Boolean)) achados.add(a);
   }
   return [...achados].sort();
 }

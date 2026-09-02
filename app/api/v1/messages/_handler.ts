@@ -325,6 +325,19 @@ export async function sendMessageHandler(
   let outboundBody = input.body ?? null;
   let outboundMetadata: Record<string, unknown> = { ...(input.metadata ?? {}) };
 
+  // Se o envio é manual por atendente humano com assinatura de conversa configurada:
+  if (
+    ctx.actor.type === "user" &&
+    ctx.actor.signature &&
+    outboundBody &&
+    outboundBody.trim().length > 0
+  ) {
+    const sig = ctx.actor.signature.trim();
+    if (sig) {
+      outboundBody = `*${sig}:*\n${outboundBody}`;
+    }
+  }
+
   if (input.type === "contact") {
     const sharedId = input.metadata?.shared_contact_id;
     const inline = input.metadata?.shared_contact;
@@ -453,7 +466,7 @@ export async function sendMessageHandler(
     type: input.type,
     direction: "outbound" as const,
     status: "queued",
-    body: input.body ?? null,
+    body: outboundBody,
     media_url: input.media_url ?? null,
     media_mime: input.media_mime ?? null,
     media_storage_path: input.media_storage_path ?? null,
@@ -629,7 +642,7 @@ export async function sendMessageHandler(
             url: signed.signedUrl,
             mime: input.media_mime ?? "application/octet-stream",
             filename,
-            caption: input.body ?? null,
+            caption: outboundBody ?? null,
           },
           // O id que a PLATAFORMA conhece, lido da linha citada agora — não uma
           // cópia guardada no envio, que poderia divergir da linha.
@@ -648,7 +661,7 @@ export async function sendMessageHandler(
             url: input.media_url,
             mime: input.media_mime ?? "image/gif",
             filename,
-            caption: input.body ?? null,
+            caption: outboundBody ?? null,
           },
           replyToExternalId: citada?.external_id ?? null,
         }));
@@ -687,7 +700,7 @@ export async function sendMessageHandler(
           to: chatId,
           providerConversationId: c.provider_conversation_id,
           kind: input.type,
-          body: input.body ?? "",
+          body: outboundBody ?? "",
           replyToExternalId: citada?.external_id ?? null,
         }));
       }
@@ -771,7 +784,7 @@ export async function sendMessageHandler(
     last_outbound_at: now,
     last_message_at: now,
     last_message_preview: previewFrom({
-      body: input.body,
+      body: outboundBody ?? input.body,
       media_url: input.media_url,
       media_storage_path: input.media_storage_path,
       type: input.type,

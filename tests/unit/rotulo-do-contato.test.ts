@@ -44,10 +44,19 @@ describe("ehIdentificadorTecnico", () => {
 });
 
 describe("rotuloDoContato", () => {
-  it("prefere o nome que uma pessoa escolheu", () => {
-    expect(rotuloDoContato({ display_name: "Kaio Gomes", name: "Kaio G", phone_number: "+5531988887777" })).toBe(
-      "Kaio Gomes",
-    );
+  it("prefere o nome formal cadastrado no CRM (name) sobre o display_name (pushName do WhatsApp)", () => {
+    expect(
+      rotuloDoContato({ display_name: "Wl", name: "Wesley Lopes", phone_number: "+556796158752" }),
+    ).toBe("Wesley Lopes");
+  });
+
+  it("usa display_name quando name for nulo ou vazio", () => {
+    expect(
+      rotuloDoContato({ display_name: "Wl", name: null, phone_number: "+556796158752" }),
+    ).toBe("Wl");
+    expect(
+      rotuloDoContato({ display_name: "Wl", name: "   ", phone_number: "+556796158752" }),
+    ).toBe("Wl");
   });
 
   it("pula o display_name TÉCNICO e usa o que vier depois", () => {
@@ -79,6 +88,59 @@ describe("rotuloDoContato", () => {
     expect(rotuloDoContato({ display_name: "Contato 543134@lid", name: null, phone_number: null })).toBe(
       SEM_NOME,
     );
+  });
+
+  it("patchContactHandler sincroniza display_name quando name é atualizado no CRM", async () => {
+    const { patchContactHandler } = await import("@/app/api/v1/contacts/_handler");
+    let patchExecutado: Record<string, unknown> = {};
+    const fakeClient = {
+      from: () => ({
+        select: () => ({
+          eq: () => ({
+            maybeSingle: async () => ({
+              data: {
+                id: "c-1",
+                organization_id: "org-1",
+                is_anonymized: false,
+                name: null,
+                display_name: "Wl",
+                tags: [],
+                consent: {},
+              },
+              error: null,
+            }),
+          }),
+        }),
+        update: (p: Record<string, unknown>) => {
+          patchExecutado = p;
+          return {
+            eq: () => ({
+              select: () => ({
+                maybeSingle: async () => ({
+                  data: { id: "c05e7a00-0000-4000-8000-0000000000c1", ...p },
+                  error: null,
+                }),
+              }),
+            }),
+          };
+        },
+      }),
+      rpc: () => ({ then: (r: (v: unknown) => unknown) => r({ error: null }) }),
+    };
+
+    await patchContactHandler(
+      fakeClient as never,
+      {
+        organization_id: "c05e7a00-0000-4000-8000-000000000001",
+        actor: { type: "user", id: "c05e7a00-0000-4000-8000-0000000000a1" },
+        requestId: "r-1",
+      },
+      "c05e7a00-0000-4000-8000-0000000000c1",
+      { name: "Wesley Lopes" } as never,
+    );
+
+    expect(patchExecutado.name).toBe("Wesley Lopes");
+    expect(patchExecutado.display_name).toBe("Wesley Lopes");
   });
 });
 

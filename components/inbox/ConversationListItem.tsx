@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import type { ConversationWithContact } from "@/hooks/inbox/useConversationsRealtime";
 import { rotuloDoContato } from "@/lib/contacts/rotulo-do-contato";
+import { useTempo } from "@/lib/tempo/TempoProvider";
 
 interface Props {
   conversation: ConversationWithContact;
@@ -43,12 +44,12 @@ function initials(name: string | null | undefined, fallback: string): string {
   return (first + last).toUpperCase();
 }
 
-function relativeTime(iso: string | null): string {
+function relativeTime(iso: string | null, formatarHora: (d: Date | string) => string): string {
   if (!iso) return "";
   const d = new Date(iso);
   const now = new Date();
   const sameDay = d.toDateString() === now.toDateString();
-  if (sameDay) return format(d, "HH:mm");
+  if (sameDay) return formatarHora(d);
   const diff = (now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24);
   if (diff < 7) return formatDistanceToNowStrict(d, { addSuffix: false, locale: ptBR });
   return format(d, "dd/MM");
@@ -68,6 +69,7 @@ export function ConversationListItem({
   queuePosition,
   mostrarCanal,
 }: Props) {
+  const { formatarHora } = useTempo();
   const c = conversation.contacts ?? null;
   const displayName = rotuloDoContato(c);
   const phoneFallback = c?.phone_number ?? "??";
@@ -76,7 +78,7 @@ export function ConversationListItem({
   const overflow = tags.length - visibleTags.length;
   const preview = conversation.last_message_preview?.trim() || "Sem mensagens";
   const truncated = preview.length > 60 ? `${preview.slice(0, 60)}…` : preview;
-  const time = relativeTime(conversation.last_message_at);
+  const time = relativeTime(conversation.last_message_at, formatarHora);
   const unread = conversation.unread_count_for_assignee ?? 0;
   const dot = STATUS_DOT[conversation.status] ?? STATUS_DOT.open;
   const isAi = conversation.status === "ai_handling";

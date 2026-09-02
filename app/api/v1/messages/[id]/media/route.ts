@@ -19,6 +19,7 @@ import {
   type ChannelProvider,
   type ChannelSessionRef,
 } from "@/lib/channels";
+import { storagePathFor } from "@/lib/messaging/media/types";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -52,19 +53,24 @@ export async function GET(_req: NextRequest, ctx: RouteCtx): Promise<Response> {
   // Filtro explícito de organization_id por doutrina (defense-in-depth).
   const { data: msg, error } = await supabase
     .from("messages")
-    .select("id, media_url, media_mime, media_storage_path, channel_session_id")
+    .select("id, conversation_id, external_id, type, media_url, media_mime, media_storage_path, channel_session_id, metadata")
     .eq("id", messageId)
     .eq("organization_id", activeOrg.orgId)
     .maybeSingle();
   if (error) {
     return fail("internal_error", "Erro ao buscar mensagem.", 500, { requestId });
   }
-  if (!msg || (!msg.media_storage_path && !msg.media_url)) {
+
+  const isMediaMsgType = msg && ["image", "audio", "video", "document", "sticker"].includes(msg.type);
+  const mediaUrlCandidate = msg?.media_url || (isMediaMsgType && msg?.external_id ? `/api/files/${encodeURIComponent(msg.external_id)}` : null);
+
+  if (!msg || (!msg.media_storage_path && !mediaUrlCandidate)) {
     return fail("not_found", "Mensagem sem mídia.", 404, { requestId });
   }
 
+  const admin = createAdminClient();
+
   if (msg.media_storage_path) {
-    const admin = createAdminClient();
     const { data: signed, error: signErr } = await admin.storage
       .from("whatsapp-media")
       .createSignedUrl(msg.media_storage_path, SIGNED_URL_TTL_S);
@@ -80,46 +86,76 @@ export async function GET(_req: NextRequest, ctx: RouteCtx): Promise<Response> {
 
   // ── Fallback: o worker ainda não persistiu ──────────────────────────────────
   //
-  // O drain é cron de minuto a minuto, então esta janela é diária: quem abre a
-  // conversa antes da persistência cai aqui. O browser não alcança o transporte
-  // nem tem a credencial, por isso o proxy é server-side.
-  //
-  // Pelo ADAPTER, não por uma função fixa. Esta era literalmente a linha que o
-  // conserto do worker removeu de lá e esqueceu aqui: com `fetchWahaMedia` em
-  // duro, o path de um anexo do canal intermediado era procurado dentro do
-  // contêiner do canal por QR — 404, e a tela dizia "mídia indisponível".
-  if (msg.media_url) {
-    if (msg.media_url.startsWith("http://") || msg.media_url.startsWith("https://")) {
-      const response = NextResponse.redirect(msg.media_url, 302);
-      response.headers.set("X-Request-Id", requestId);
-      return response;
-    }
-
+  // Baixa server-side pelo ADAPTER com as credenciais do transporte e
+  // persiste oportunisticamente no bucket `whatsapp-media`, atualizando a mensagem.
+  if (mediaUrlCandidate) {
     try {
-      const admin = createAdminClient();
-      const { data: sessao } = await admin
-        .from("channel_sessions")
-        .select(`provider, ${CHANNEL_SESSION_REF_COLUMNS}`)
-        .eq("organization_id", activeOrg.orgId)
-        .eq("id", msg.channel_session_id)
-        .maybeSingle();
+      let sessao = null;
+      if (msg.channel_session_id) {
+        const { data } = await admin
+          .from("channel_sessions")
+          .select(`provider, ${CHANNEL_SESSION_REF_COLUMNS}`)
+          .eq("organization_id", activeOrg.orgId)
+          .eq("id", msg.channel_session_id)
+          .maybeSingle();
+        sessao = data;
+      }
+
+      if (!sessao) {
+        const { data } = await admin
+          .from("channel_sessions")
+          .select(`provider, ${CHANNEL_SESSION_REF_COLUMNS}`)
+          .eq("organization_id", activeOrg.orgId)
+          .eq("status", "WORKING")
+          .limit(1)
+          .maybeSingle();
+        sessao = data;
+      }
+
+      if (!sessao) {
+        const { data } = await admin
+          .from("channel_sessions")
+          .select(`provider, ${CHANNEL_SESSION_REF_COLUMNS}`)
+          .eq("organization_id", activeOrg.orgId)
+          .limit(1)
+          .maybeSingle();
+        sessao = data;
+      }
 
       const adapter = getAdapter(
         ((sessao?.provider as string) ?? DEFAULT_CHANNEL_PROVIDER) as ChannelProvider,
       );
       const sessionRef = sessao ? resolveSessionRef(sessao as unknown as ChannelSessionRef) : null;
       if (!adapter.fetchInboundMedia || !sessionRef) {
-        // Canal sem mídia de entrada não é defeito: é estado normal. 404 diz a
-        // verdade ("não há o que servir"); 502 acusaria uma falha inexistente.
         return fail("not_found", "Mensagem sem mídia.", 404, { requestId });
       }
 
       const media = await adapter.fetchInboundMedia({
         organizationId: activeOrg.orgId,
         sessionRef,
-        url: msg.media_url,
+        url: mediaUrlCandidate,
         hintMime: msg.media_mime,
       });
+
+      // Persistência oportunista no Supabase Storage
+      const path = storagePathFor(activeOrg.orgId, msg.conversation_id, msg.id, media.mime);
+      const { error: uploadErr } = await admin.storage
+        .from("whatsapp-media")
+        .upload(path, media.buffer, { contentType: media.mime, upsert: true });
+
+      if (!uploadErr) {
+        await admin
+          .from("messages")
+          .update({
+            media_storage_path: path,
+            media_size_bytes: media.buffer.byteLength,
+            media_mime: media.mime,
+            metadata: { ...((msg.metadata as Record<string, unknown>) ?? {}), media_status: "stored" },
+          })
+          .eq("id", msg.id)
+          .eq("organization_id", activeOrg.orgId);
+      }
+
       return new Response(new Uint8Array(media.buffer), {
         status: 200,
         headers: {
@@ -128,7 +164,8 @@ export async function GET(_req: NextRequest, ctx: RouteCtx): Promise<Response> {
           "X-Request-Id": requestId,
         },
       });
-    } catch {
+    } catch (err) {
+      console.error("[messages.media] fallback proxy failed", err instanceof Error ? err.message : String(err));
       return fail("bad_gateway", "Mídia indisponível no momento.", 502, { requestId });
     }
   }
