@@ -154,17 +154,40 @@ sequenceDiagram
 
 ---
 
-## 5. Fluxo de Saída (Outbound) e Proxy de QR Code
+## 5. Fluxo de Saída (Outbound), Mídia e Proxy
 
 ### 5.1 Envio de Mensagem Outbound
 1. Backend Next.js invoca `GowaClient` (`lib/gowa/client.ts`).
-2. Roteamento por tipo:
-   - Texto: `POST /send/message` com header `X-Device-Id: <session_name>` e body `{ "phone": "5511987654321@s.whatsapp.net", "message": "Texto...", "reply_message_id": "..." }`.
-   - Mídia: `POST /send/image`, `/send/file`, `/send/audio`.
+2. Roteamento por tipo e formato:
+   - **Texto:** `POST /send/message` com header `X-Device-Id: <session_name>` e body `{ "phone": "5511987654321@s.whatsapp.net", "message": "Texto...", "reply_message_id": "..." }`.
+   - **Imagens estáticas (JPG/PNG):** `POST /send/image`. Quando a imagem já possui URL pública/assinada HTTP(S), o envio utiliza diretamente o campo `image_url` via `multipart/form-data` com `caption`, sem download prévio. Caso a URL falhe ou seja data-URI, o fallback seguro faz o download do buffer e anexa no campo `image`.
+   - **GIFs Animados (Loop Nativo):** No protocolo do WhatsApp, GIFs animados funcionam como vídeos MP4 com reprodução em loop silencioso (`videoMessage` com flag `gifPlayback: true`). O envio de animações do Giphy é realizado via `POST /send/video` com o campo `gif_playback: true` no `multipart/form-data` (prioritariamente via `video_url` direto ou download do buffer `animacao.mp4`). A mensagem é registrada no CRM como `type: "video"` com `metadata: { gif_playback: true }`.
+   - **Figurinhas Estáticas e Animadas:** O envio de figurinhas/stickers é realizado via `POST /send/sticker` (`sticker_url` ou upload binário no campo `sticker`), onde o GOWA converte para WebP (512x512 pixels).
+   - **Áudios:** `POST /send/audio` via `multipart/form-data` com campo de arquivo binário `audio` (`audio.mp3`).
+   - **Documentos/Arquivos:** `POST /send/file` via `multipart/form-data` com campo de arquivo binário `file`.
 3. Headers de Autenticação: `Authorization: Basic <base64>` e `X-Device-Id: <session_name>`.
 4. Persistência na tabela `messages` com `direction: "outbound"` e status inicial `sent`.
 
-### 5.2 Fluxo de Exibição de QR Code no Frontend
+### 5.2 Exibição de GIFs no Frontend do CRM (Inbox e Lista de Conversas)
+1. **Bolha de Mensagem no Inbox (`MediaRenderer.tsx` / `VideoMedia.tsx`):**
+   - Mensagens com `isGifPlayback(metadata)` (`metadata.gif_playback === true`) são renderizadas como `<video autoPlay loop muted playsInline preload="auto" ... />` sem o atributo `controls`.
+   - Isso replica a experiência autêntica de GIF (animação contínua e silenciosa, sem barra de progresso, botão de play ou contador de tempo).
+   - Vídeos convencionais continuam renderizados com controles normais (`controls`, sem autoplay nem loop).
+2. **Prévia na Lista de Conversas (`previewFrom` e Ingestão):**
+   - Na criação outbound (`app/api/v1/messages/_handler.ts`) e na recepção inbound (`lib/gowa/ingest.ts`), a função de prévia identifica a flag `gif_playback` e gera o rótulo `"GIF"` em vez de `"[video]"`.
+
+### 5.3 Proxy de Mídia e URLs Externas (Giphy e CDNs)
+1. No endpoint `/api/v1/messages/[id]/media`, quando a mídia não está ainda salva no Supabase Storage:
+   - Se for uma URL externa pública (ex: Giphy `https://media.giphy.com/...` ou CDN externa), o `fetchInboundMedia` realiza o download direto da URL externa **sem reescrever o hostname para o GOWA local** e **sem enviar credenciais Basic Auth do GOWA**, evitando erros 404 e tela "Mídia indisponível".
+   - Se for uma rota interna de arquivo do GOWA (ex: `/api/files/...` ou `http://localhost:4000/...`), o cliente do GOWA anexa as credenciais Basic Auth e `X-Device-Id`.
+
+### 5.4 Isolamento de Grupos, Transmissões e Canais
+Por doutrina do DeskcommCRM, o sistema é focado estritamente em atendimentos e vendas 1-a-1.
+- Eventos recebidos do GOWA com `chat_id` terminando em `@g.us`, `remoteJid` terminando em `@g.us` ou `is_group === true` são descartados imediatamente com `group_message_ignored` no pipeline de ingestão (`lib/gowa/ingest.ts`).
+- Transmissões (`@broadcast`) e newsletters (`@newsletter`) são descartadas com `broadcast_ignored`.
+- Essa proteção impede que participantes de grupos de WhatsApp gerem contatos indesejados ou conversas sem mensagens no Inbox do CRM.
+
+### 5.4 Fluxo de Exibição de QR Code no Frontend
 1. O frontend requisita a imagem via:
    `<img src="/api/v1/channel-sessions/[id]/qr?t=[timestamp]" />`
 2. A rota `/api/v1/channel-sessions/[id]/qr/route.ts` identifica `session.provider === 'gowa'`.
@@ -251,9 +274,14 @@ services:
 GOWA_API_BASE_URL=http://localhost:4000
 GOWA_API_USER=admin
 GOWA_API_PASS=5pGy5LqNi3FpMJYAlcB0wNZ0HI453qZV
-GOWA_WEBHOOK_SECRET=
+GOWA_WEBHOOK_SECRET=a3fb8a95-da13-4577-8f9d-3f84854eac89
 GOWA_WEBHOOK_REQUIRE_SIGNATURE=false
+GOWA_WEBHOOK_BASE_URL=http://host.docker.internal:3000
 ```
+
+> **Autenticação HMAC de Webhooks:**
+> O motor GOWA assina payloads de webhook através do cabeçalho HTTP `X-Webhook-Signature` contendo o HMAC SHA-256 do corpo da requisição utilizando a chave definida em `WHATSAPP_WEBHOOK_SECRET` do container GOWA. O Next.js valida automaticamente esse header comparando-o contra `GOWA_WEBHOOK_SECRET`. Ambos os valores devem coincidir exatamente.
+
 
 ---
 

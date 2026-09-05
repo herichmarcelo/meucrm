@@ -3,7 +3,8 @@ import { describe, expect, it } from "vitest";
 
 import { MediaRenderer } from "@/components/inbox/media/MediaRenderer";
 import { MessageBubble } from "@/components/inbox/MessageBubble";
-import type { Message } from "@/lib/types/messaging";
+import { isGifPlayback, type Message } from "@/lib/types/messaging";
+import { previewFrom } from "@/app/api/v1/messages/_handler";
 
 function msg(over: Partial<Message>): Message {
   return {
@@ -46,13 +47,58 @@ describe("MediaRenderer", () => {
     render(<MediaRenderer message={msg({ type: "audio" })} />);
     expect(screen.getByRole("button", { name: /reproduzir/i })).toBeInTheDocument();
   });
-  it("video → VideoMedia", () => {
+  it("video → VideoMedia normal (com controls, sem autoplay/loop)", () => {
     const { container } = render(<MediaRenderer message={msg({ type: "video" })} />);
-    expect(container.querySelector("video")).not.toBeNull();
+    const video = container.querySelector("video");
+    expect(video).not.toBeNull();
+    expect(video).toHaveAttribute("controls");
+    expect(video).not.toHaveAttribute("autoplay");
+    expect(video).not.toHaveAttribute("loop");
+  });
+  it("video com gif_playback: true → VideoMedia em loop sem controls", () => {
+    const { container } = render(
+      <MediaRenderer message={msg({ type: "video", metadata: { gif_playback: true } })} />,
+    );
+    const video = container.querySelector("video");
+    expect(video).not.toBeNull();
+    expect(video).not.toHaveAttribute("controls");
+    expect(video).toHaveAttribute("autoplay");
+    expect(video).toHaveAttribute("loop");
+    expect((video as HTMLVideoElement).muted || video?.hasAttribute("muted")).toBeTruthy();
+    expect(video).toHaveAttribute("playsinline");
   });
   it("document (e tipos desconhecidos) → DocumentCard", () => {
     render(<MediaRenderer message={msg({ type: "document", media_mime: "application/pdf" })} />);
     expect(screen.getByRole("link", { name: /baixar pdf/i })).toBeInTheDocument();
+  });
+});
+
+describe("isGifPlayback & previewFrom", () => {
+  it("detecta flag gif_playback booleana ou string", () => {
+    expect(isGifPlayback({ gif_playback: true })).toBe(true);
+    expect(isGifPlayback({ gif_playback: "true" })).toBe(true);
+    expect(isGifPlayback({ gif_playback: false })).toBe(false);
+    expect(isGifPlayback({})).toBe(false);
+    expect(isGifPlayback(null)).toBe(false);
+    expect(isGifPlayback(undefined)).toBe(false);
+  });
+
+  it("previewFrom gera 'GIF' quando gif_playback é true e '[video]' quando ausente/falso", () => {
+    expect(
+      previewFrom({
+        type: "video",
+        media_url: "https://giphy.com/anim.mp4",
+        metadata: { gif_playback: true },
+      }),
+    ).toBe("GIF");
+
+    expect(
+      previewFrom({
+        type: "video",
+        media_url: "https://example.com/video.mp4",
+        metadata: {},
+      }),
+    ).toBe("[video]");
   });
 });
 

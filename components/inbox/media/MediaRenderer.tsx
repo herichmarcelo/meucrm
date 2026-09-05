@@ -1,5 +1,5 @@
 "use client";
-import type { Message } from "@/lib/types/messaging";
+import { isGifPlayback, type Message } from "@/lib/types/messaging";
 
 import { AudioPlayer } from "./AudioPlayer";
 import { DocumentCard } from "./DocumentCard";
@@ -22,7 +22,12 @@ export function MediaRenderer({ message }: { message: Message }) {
     case "audio":
       return <AudioPlayer messageId={message.id} isOutbound={isOutbound} />;
     case "video":
-      return <VideoMedia messageId={message.id} />;
+      return (
+        <VideoMedia
+          messageId={message.id}
+          isGifPlayback={isGifPlayback(message.metadata)}
+        />
+      );
     case "contact":
       return null;
     default:

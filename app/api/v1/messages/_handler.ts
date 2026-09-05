@@ -30,7 +30,7 @@ import {
 import type { ListMessagesQuery, SendMessageInput } from "@/lib/schemas";
 import { sendTemplateForSession } from "@/lib/channels/meta/send-template-for-session";
 import { createAdminClient } from "@/lib/supabase/admin";
-import type { Message } from "@/lib/types/messaging";
+import { isGifPlayback, type Message } from "@/lib/types/messaging";
 
 type SB = SupabaseClient;
 
@@ -225,16 +225,24 @@ export async function listMessagesHandler(
 // send
 // ---------------------------------------------------------------------------
 
-function previewFrom(input: {
+export function previewFrom(input: {
   body?: string;
   media_url?: string;
   media_storage_path?: string;
   type?: string;
+  metadata?: Record<string, unknown> | null;
 }): string {
   if (input.body) return input.body.slice(0, 280);
-  if (input.media_url || input.media_storage_path) return `[${input.type ?? "media"}]`;
+  if (input.media_url || input.media_storage_path) {
+    if (input.type === "video" && isGifPlayback(input.metadata)) {
+      return "GIF";
+    }
+    return `[${input.type ?? "media"}]`;
+  }
   return "";
 }
+
+export const getLastMessagePreview = previewFrom;
 
 /**
  * Atendente respondeu manualmente → IA fica quieta nesta conversa por uma janela curta,
@@ -268,12 +276,35 @@ export async function sendMessageHandler(
   // subiu o código sem a migration 0106, pedir a coluna direto derrubaria TODO
   // envio com 42703. Sem a coluna, nada está arquivado — e a consulta sem ela é a
   // consulta certa (ver lib/channels/archived).
-  const convSelect = (comArchived: boolean) =>
-    `id, organization_id, contact_id, channel_session_id, is_group, group_chat_id, bot_silenced_until, provider_conversation_id, contacts:contact_id(phone_number, wa_identity, wa_lid, is_blocked), channel_sessions:channel_session_id(${CHANNEL_SESSION_REF_COLUMNS}, status${comArchived ? `, ${ARCHIVED_AT}` : ""})`;
-  const { data: conv, error: convErr } = await queryTolerantToMissingArchived(
+  const convSelect = (comArchived: boolean, refCols = CHANNEL_SESSION_REF_COLUMNS) =>
+    `id, organization_id, contact_id, channel_session_id, is_group, group_chat_id, bot_silenced_until, provider_conversation_id, contacts:contact_id(phone_number, wa_identity, wa_lid, email, is_blocked), channel_sessions:channel_session_id(${refCols}, status${comArchived ? `, ${ARCHIVED_AT}` : ""})`;
+  let { data: conv, error: convErr } = await queryTolerantToMissingArchived(
     () => supabase.from("conversations").select(convSelect(true)).eq("id", input.conversation_id).maybeSingle(),
     () => supabase.from("conversations").select(convSelect(false)).eq("id", input.conversation_id).maybeSingle(),
   );
+
+  // Fallback tolerante para banco que ainda não rodou as migrations mais recentes de canais (ex: email_inbound_address, instagram_account_id)
+  if (convErr && convErr.code === "42703") {
+    const fallbackCols = "provider, waha_session_name, meta_phone_number_id, zernio_account_id, gowa_device_id";
+    const retry = await queryTolerantToMissingArchived(
+      () => supabase.from("conversations").select(convSelect(true, fallbackCols)).eq("id", input.conversation_id).maybeSingle(),
+      () => supabase.from("conversations").select(convSelect(false, fallbackCols)).eq("id", input.conversation_id).maybeSingle(),
+    );
+    if (!retry.error) {
+      conv = retry.data;
+      convErr = null;
+    } else if (retry.error.code === "42703") {
+      const baseCols = "provider, waha_session_name, meta_phone_number_id";
+      const retryBase = await queryTolerantToMissingArchived(
+        () => supabase.from("conversations").select(convSelect(true, baseCols)).eq("id", input.conversation_id).maybeSingle(),
+        () => supabase.from("conversations").select(convSelect(false, baseCols)).eq("id", input.conversation_id).maybeSingle(),
+      );
+      if (!retryBase.error) {
+        conv = retryBase.data;
+        convErr = null;
+      }
+    }
+  }
 
   if (convErr) {
     throw new ApiError(500, "internal_error", undefined, ctx.requestId, convErr.message);
@@ -296,6 +327,7 @@ export async function sendMessageHandler(
       phone_number: string | null;
       wa_identity: string | null;
       wa_lid: string | null;
+      email: string | null;
       is_blocked: boolean;
     } | null;
     channel_sessions: (ChannelSessionRef & { status: string; archived_at?: string | null }) | null;
@@ -498,19 +530,38 @@ export async function sendMessageHandler(
   let message = created as unknown as Message;
 
   // O canal vem da SESSÃO (migration 0087), não de um literal. O fallback só
-  // alcança o caso em que o embed não trouxe a sessão — impossível hoje
-  // (`conversations.channel_session_id` é NOT NULL com FK ON DELETE RESTRICT),
-  // e ainda assim mantido para não trocar o desfecho desse ramo defensivo.
-  const adapter = getAdapter(c.channel_sessions?.provider ?? DEFAULT_CHANNEL_PROVIDER);
+  let sessionEmUso = c.channel_sessions;
+  if (!sessionEmUso || sessionEmUso.archived_at || sessionEmUso.status !== "WORKING") {
+    const { data: fallbackSession } = await supabase
+      .from("channel_sessions")
+      .select(`id, ${CHANNEL_SESSION_REF_COLUMNS}, status, archived_at`)
+      .eq("organization_id", c.organization_id)
+      .is("archived_at", null)
+      .eq("status", "WORKING")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (fallbackSession) {
+      sessionEmUso = fallbackSession as unknown as (ChannelSessionRef & { status: string; archived_at?: string | null });
+      await supabase
+        .from("conversations")
+        .update({ channel_session_id: fallbackSession.id })
+        .eq("id", c.id);
+    }
+  }
+
+  const adapter = getAdapter(sessionEmUso?.provider ?? DEFAULT_CHANNEL_PROVIDER);
   const chatId = adapter.resolveRecipient({
     isGroup: c.is_group,
     groupChatId: c.group_chat_id,
     phoneNumber: c.contacts?.phone_number,
     waIdentity: c.contacts?.wa_identity,
     waLid: c.contacts?.wa_lid,
+    email: c.contacts?.email,
   });
 
-  if (c.channel_sessions?.archived_at) {
+  if (sessionEmUso?.archived_at) {
     // Canal ARQUIVADO = canal excluído pelo usuário: a sessão já foi deslogada e
     // removida do transporte, e a credencial do canal oficial já foi revogada. É a
     // promessa da migration 0106 ("não é mais elegível para envio") virando
@@ -554,7 +605,7 @@ export async function sendMessageHandler(
       .select(MSG_COLS)
       .maybeSingle();
     if (updated) message = updated as unknown as Message;
-  } else if (!c.channel_sessions || c.channel_sessions.status !== "WORKING") {
+  } else if (!sessionEmUso || sessionEmUso.status !== "WORKING") {
     const { data: updated } = await supabase
       .from("messages")
       .update({
@@ -607,7 +658,7 @@ export async function sendMessageHandler(
           ? (
               await adapter.sendTemplate({
                 organizationId: ctx.organization_id,
-                sessionRef: resolveSessionRef(c.channel_sessions),
+                sessionRef: resolveSessionRef(sessionEmUso!),
                 to: chatId,
                 providerConversationId: c.provider_conversation_id,
                 name: input.template_name ?? "",
@@ -634,7 +685,7 @@ export async function sendMessageHandler(
         const filename = input.media_storage_path.split("/").pop() ?? undefined;
         ({ externalId } = await adapter.send({
           organizationId: ctx.organization_id,
-          sessionRef: resolveSessionRef(c.channel_sessions),
+          sessionRef: resolveSessionRef(sessionEmUso!),
           to: chatId,
           providerConversationId: c.provider_conversation_id,
           kind: input.type,
@@ -649,11 +700,11 @@ export async function sendMessageHandler(
           replyToExternalId: citada?.external_id ?? null,
         }));
       } else if (input.media_url) {
-        // Envio direto por URL externa (ex.: GIF animado da Giphy)
-        const filename = input.media_url.split("/").pop()?.split("?")[0] || "animacao.gif";
+        // Envio direto por URL externa (ex.: GIF animado da Giphy como MP4)
+        const filename = input.media_url.split("/").pop()?.split("?")[0] || "animacao.mp4";
         ({ externalId } = await adapter.send({
           organizationId: ctx.organization_id,
-          sessionRef: resolveSessionRef(c.channel_sessions),
+          sessionRef: resolveSessionRef(sessionEmUso!),
           to: chatId,
           providerConversationId: c.provider_conversation_id,
           kind: input.type || "image",
@@ -662,9 +713,13 @@ export async function sendMessageHandler(
             mime: input.media_mime ?? "image/gif",
             filename,
             caption: outboundBody ?? null,
+            // gif_playback vem do metadata quando o Composer envia GIF como vídeo MP4.
+            // O adapter GOWA usa essa flag para rotear para /send/video com gif_playback=true.
+            gifPlayback: outboundMetadata.gif_playback === true,
           },
           replyToExternalId: citada?.external_id ?? null,
         }));
+
       } else if (input.type === "contact") {
         const sc = outboundMetadata.shared_contact as
           | { name: string; phone_number: string }
@@ -681,7 +736,7 @@ export async function sendMessageHandler(
         const nome = sc.name?.trim() || telefone;
         ({ externalId } = await adapter.send({
           organizationId: ctx.organization_id,
-          sessionRef: resolveSessionRef(c.channel_sessions),
+          sessionRef: resolveSessionRef(sessionEmUso!),
           to: chatId,
           providerConversationId: c.provider_conversation_id,
           kind: "contact",
@@ -696,7 +751,7 @@ export async function sendMessageHandler(
       } else {
         ({ externalId } = await adapter.send({
           organizationId: ctx.organization_id,
-          sessionRef: resolveSessionRef(c.channel_sessions),
+          sessionRef: resolveSessionRef(sessionEmUso!),
           to: chatId,
           providerConversationId: c.provider_conversation_id,
           kind: input.type,
@@ -788,6 +843,7 @@ export async function sendMessageHandler(
       media_url: input.media_url,
       media_storage_path: input.media_storage_path,
       type: input.type,
+      metadata: outboundMetadata,
     }),
     // Resposta humana/CRM zera pendências — espelha fn_mark_conversation_message
     // outbound, que o envio pelo CRM não chama (só atualiza colunas à mão).

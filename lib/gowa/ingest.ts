@@ -117,6 +117,7 @@ async function markConversation(
 
 function resolveGowaMessageType(p: GowaPayload): string {
   if (p.has_media) {
+    if (p.sticker_url || p.mime_type === "image/webp") return "sticker";
     if (p.image_url || p.mime_type?.startsWith("image/")) return "image";
     if (p.audio_url || p.mime_type?.startsWith("audio/")) return "audio";
     if (p.file_url || p.mime_type?.startsWith("video/")) return "video";
@@ -125,7 +126,7 @@ function resolveGowaMessageType(p: GowaPayload): string {
   return "text";
 }
 
-function mediaUrlOf(p: GowaPayload): string | null {
+function _mediaUrlOf(p: GowaPayload): string | null {
   return p.media_url ?? p.image_url ?? p.audio_url ?? p.file_url ?? null;
 }
 
@@ -179,15 +180,31 @@ export async function dispatchGowaEvent(
   }
 
   // 4. Mensagem Inbound
-  const chatId = String(
-    rawObj.from ??
+  const rawChatId = String(
     rawObj.chat_id ??
-    rawObj.sender ??
     (rawObj.key as Record<string, unknown>)?.remoteJid ??
     rawObj.remoteJid ??
+    rawObj.from ??
     (envelope as Record<string, unknown>).from ??
     "",
   );
+
+  const isGroup =
+    Boolean(rawObj.is_group) ||
+    rawChatId.endsWith("@g.us") ||
+    String(rawObj.chat_id ?? "").endsWith("@g.us") ||
+    String(rawObj.from ?? "").endsWith("@g.us") ||
+    String((rawObj.key as Record<string, unknown>)?.remoteJid ?? "").endsWith("@g.us");
+
+  if (isGroup) {
+    return { processed: false, reason: "group_message_ignored" };
+  }
+
+  if (rawChatId.endsWith("@newsletter") || rawChatId.endsWith("@broadcast")) {
+    return { processed: false, reason: "broadcast_ignored" };
+  }
+
+  const chatId = rawChatId || String(rawObj.from ?? "");
   const fromLid = (rawObj.from_lid as string) ?? ((rawObj.key as Record<string, unknown>)?.participant as string) ?? null;
   const parsed = parseChatIdGowa(chatId, fromLid);
 
@@ -268,6 +285,11 @@ export async function dispatchGowaEvent(
   } as unknown as GowaPayload);
   const now = new Date().toISOString();
 
+  const isGif =
+    Boolean((msgObj?.videoMessage as Record<string, unknown>)?.gifPlayback) ||
+    Boolean(rawObj.gif_playback) ||
+    Boolean(rawObj.gifPlayback);
+
   // Inserção da mensagem no CRM
   const { data: insertedMsg, error: msgErr } = await admin
     .from("messages")
@@ -287,6 +309,7 @@ export async function dispatchGowaEvent(
         raw_event: event,
         mime_type: mimeType,
         quoted_body: (rawObj.quoted_body as string) ?? null,
+        ...(isGif ? { gif_playback: true } : {}),
       },
     })
     .select("id")
@@ -301,7 +324,7 @@ export async function dispatchGowaEvent(
     return { processed: false, reason: "message_insert_failed" };
   }
 
-  const preview = messageText.slice(0, 280) || (msgType !== "text" ? `[${msgType}]` : "");
+  const preview = messageText.slice(0, 280) || (isGif ? "GIF" : msgType !== "text" ? `[${msgType}]` : "");
   await markConversation(admin, conversationId, "inbound", preview, now);
 
   // Emite evento de persistência no bucket caso a mensagem contenha mídia

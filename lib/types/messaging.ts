@@ -94,3 +94,12 @@ export function ackToStatus(ack: number | null | undefined): Message["status"] {
   if (ack >= 1) return "sent";
   return "sending";
 }
+
+/**
+ * Detecta se a mensagem ou seu metadata representa reprodução de GIF (em loop silencioso).
+ */
+export function isGifPlayback(metadata?: Record<string, unknown> | null): boolean {
+  if (!metadata) return false;
+  return metadata.gif_playback === true || metadata.gif_playback === "true";
+}
+
