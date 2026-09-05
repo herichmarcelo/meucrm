@@ -8,6 +8,7 @@ import { ackToStatus } from "@/lib/types/messaging";
 import { sincronizarSaudeDaConexao } from "@/lib/channels/health";
 import { aplicarEfeitosPosEntrada } from "@/lib/channels/pos-entrada";
 import { logger } from "@/lib/logger";
+import { pausarIaPorAtendimentoManual } from "@/lib/escalacao/atendimento-manual";
 import type { createAdminClient } from "@/lib/supabase/admin";
 import type { GowaEnvelope, GowaPayload } from "./envelope";
 
@@ -130,6 +131,41 @@ function _mediaUrlOf(p: GowaPayload): string | null {
   return p.media_url ?? p.image_url ?? p.audio_url ?? p.file_url ?? null;
 }
 
+const JANELA_DO_ECO_MS = 60 * 1000;
+
+async function ehEcoDeEnvioGowa(
+  admin: Admin,
+  organizationId: string,
+  conversationId: string,
+  body: string | null,
+  tipo: string,
+): Promise<{ ehEco: boolean; messageIdEmVoo?: string }> {
+  const desde = new Date(Date.now() - JANELA_DO_ECO_MS).toISOString();
+  const { data, error } = await admin
+    .from("messages")
+    .select("id, body, type")
+    .eq("organization_id", organizationId)
+    .eq("conversation_id", conversationId)
+    .eq("direction", "outbound")
+    .in("sent_via", ["ai", "user"])
+    .is("external_id", null)
+    .in("status", ["queued", "sending"])
+    .gte("created_at", desde)
+    .limit(20);
+
+  if (error || !data || data.length === 0) return { ehEco: false };
+
+  const corpoEco = (body ?? "").trim();
+  const match = data.find((m) => {
+    if (tipo === "text" || !tipo) {
+      return (m.body ?? "").trim() === corpoEco;
+    }
+    return m.type === tipo;
+  });
+
+  return { ehEco: Boolean(match), messageIdEmVoo: match?.id };
+}
+
 /**
  * Pipeline principal de ingestão de evento do GOWA.
  */
@@ -174,9 +210,139 @@ export async function dispatchGowaEvent(
     return { processed: true };
   }
 
-  // 3. Ignora mensagens enviadas por nós mesmos (eco outbound)
+  // 3. Tratamento de mensagens de saída (fromMe / enviado pelo nosso número)
   if (isFromMe) {
-    return { processed: true, reason: "from_me_echo_ignored" };
+    const rawChatId = String(
+      rawObj.chat_id ??
+      (rawObj.key as Record<string, unknown>)?.remoteJid ??
+      rawObj.remoteJid ??
+      rawObj.to ??
+      ""
+    );
+    const isGroup =
+      Boolean(rawObj.is_group) ||
+      rawChatId.endsWith("@g.us");
+
+    if (isGroup || !rawChatId) {
+      return { processed: true, reason: "from_me_group_or_empty_ignored" };
+    }
+
+    const parsed = parseChatIdGowa(rawChatId);
+    if (!ehEnderecavel(parsed)) {
+      return { processed: true, reason: "from_me_unaddressable_chat_id" };
+    }
+
+    if (rawId) {
+      const { data: jaRegistrada } = await admin
+        .from("messages")
+        .select("id")
+        .eq("organization_id", session.organization_id)
+        .eq("external_id", rawId)
+        .limit(1)
+        .maybeSingle();
+      if (jaRegistrada) {
+        return { processed: true, reason: "from_me_already_registered" };
+      }
+    }
+
+    const contactId = await upsertContact(admin, session.organization_id, parsed, rawChatId, null);
+    if (!contactId) {
+      return { processed: false, reason: "from_me_contact_upsert_failed" };
+    }
+
+    const conversationId = await upsertConversation(admin, session.organization_id, contactId, session.id);
+    if (!conversationId) {
+      return { processed: false, reason: "from_me_conversation_upsert_failed" };
+    }
+
+    const msgObj = rawObj.message as Record<string, unknown> | undefined;
+    const messageText = String(
+      rawObj.body ??
+      rawObj.caption ??
+      rawObj.text ??
+      msgObj?.conversation ??
+      (msgObj?.extendedTextMessage as Record<string, unknown>)?.text ??
+      (msgObj?.imageMessage as Record<string, unknown>)?.caption ??
+      (msgObj?.videoMessage as Record<string, unknown>)?.caption ??
+      (msgObj?.documentMessage as Record<string, unknown>)?.caption ??
+      (typeof rawObj.message === "string" ? rawObj.message : "") ??
+      "",
+    ).trim();
+
+    const mediaUrl =
+      (rawObj.media_url as string) ??
+      (rawObj.image_url as string) ??
+      (rawObj.audio_url as string) ??
+      (rawObj.file_url as string) ??
+      null;
+
+    const hasMedia = Boolean(
+      rawObj.has_media ??
+      mediaUrl ??
+      msgObj?.imageMessage ??
+      msgObj?.audioMessage ??
+      msgObj?.videoMessage ??
+      msgObj?.documentMessage,
+    );
+
+    const mimeType = (rawObj.mime_type as string) ?? null;
+    const msgType = resolveGowaMessageType({
+      has_media: hasMedia,
+      mime_type: mimeType,
+      media_url: mediaUrl,
+    } as unknown as GowaPayload);
+
+    // Verifica se é o eco de um envio que partiu da IA ou do Composer no CRM
+    const ecoCheck = await ehEcoDeEnvioGowa(
+      admin,
+      session.organization_id,
+      conversationId,
+      messageText,
+      msgType,
+    );
+
+    if (ecoCheck.ehEco) {
+      if (ecoCheck.messageIdEmVoo && rawId) {
+        await admin
+          .from("messages")
+          .update({ external_id: rawId, status: "sent" })
+          .eq("id", ecoCheck.messageIdEmVoo);
+      }
+      return { processed: true, reason: "crm_outbound_echo_confirmed" };
+    }
+
+    // Fala humana direta pelo celular: registra histórico e pausa a IA por 1h
+    const now = new Date().toISOString();
+    await admin.from("messages").insert({
+      organization_id: session.organization_id,
+      conversation_id: conversationId,
+      channel_session_id: session.id,
+      direction: "outbound",
+      sent_via: "external_device",
+      type: msgType,
+      body: messageText,
+      media_url: mediaUrl,
+      external_id: rawId,
+      status: "sent",
+      created_at: now,
+      metadata: { raw_event: event, fromMe: true },
+    });
+
+    const isGif =
+      Boolean((msgObj?.videoMessage as Record<string, unknown>)?.gifPlayback) ||
+      Boolean(rawObj.gif_playback) ||
+      Boolean(rawObj.gifPlayback);
+
+    const preview = messageText.slice(0, 280) || (isGif ? "GIF" : msgType !== "text" ? `[${msgType}]` : "");
+    await markConversation(admin, conversationId, "outbound", preview, now);
+
+    await pausarIaPorAtendimentoManual(admin, {
+      organizationId: session.organization_id,
+      conversationId,
+      canal: "gowa",
+    });
+
+    return { processed: true, reason: "manual_outbound_recorded_ia_paused" };
   }
 
   // 4. Mensagem Inbound

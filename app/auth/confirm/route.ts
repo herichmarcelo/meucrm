@@ -139,7 +139,7 @@ export async function GET(request: NextRequest) {
       metadata: { reason: e instanceof Error ? e.message : String(e) },
       requestId,
     });
-    return redirectTo("/login?error=provisionamento");
+    return redirectTo("/get-started");
   }
 
   void audit({

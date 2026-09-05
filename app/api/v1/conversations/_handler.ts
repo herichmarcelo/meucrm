@@ -15,6 +15,31 @@ import type {
 } from "@/lib/schemas";
 import type { Conversation } from "@/lib/types/messaging";
 
+/**
+ * Prepara o termo digitado para viajar dentro de um `or=` do PostgREST.
+ */
+export function termoSeguroParaOr(bruto: string): string {
+  return bruto
+    .trim()
+    .replace(/[%_]/g, (m) => `\\${m}`)
+    .replace(/[,()]/g, "*");
+}
+
+const TETO_DE_CONTATOS_NA_BUSCA = 120;
+const ORCAMENTO_DE_IDS_NA_URL = 5_000;
+
+function idsQueCabemNaURL(ids: string[]): string[] {
+  const cabem: string[] = [];
+  let bytes = 0;
+  for (const id of ids) {
+    const custo = id.length + 1;
+    if (bytes + custo > ORCAMENTO_DE_IDS_NA_URL) break;
+    cabem.push(id);
+    bytes += custo;
+  }
+  return cabem;
+}
+
 type SB = SupabaseClient;
 
 const SELECT_COLS = `
@@ -128,8 +153,34 @@ export async function listConversationsHandler(
   }
 
   if (q.search) {
-    const s = q.search.trim().replace(/[%_]/g, (m) => `\\${m}`);
-    query = query.ilike("last_message_preview", `%${s}%`);
+    const s = termoSeguroParaOr(q.search);
+    const somenteDigitos = s.replace(/\D/g, "");
+    const pareceTelefone = somenteDigitos.length >= 4;
+
+    const camposDoContato = [
+      `display_name.ilike.*${s}*`,
+      `name.ilike.*${s}*`,
+      ...(pareceTelefone ? [`phone_number.ilike.*${somenteDigitos}*`] : []),
+    ].join(",");
+
+    const { data: contatos } = await supabase
+      .from("contacts")
+      .select("id")
+      .eq("organization_id", ctx.organization_id)
+      .eq("is_anonymized", false)
+      .or(camposDoContato)
+      .limit(TETO_DE_CONTATOS_NA_BUSCA);
+
+    const ids = idsQueCabemNaURL(
+      (contatos ?? []).map((c) => (c as { id: string }).id),
+    );
+    if (ids.length > 0) {
+      query = query.or(
+        `last_message_preview.ilike.*${s}*,contact_id.in.(${ids.join(",")})`,
+      );
+    } else {
+      query = query.ilike("last_message_preview", `%${s}%`);
+    }
   }
 
   if (q.cursor) {

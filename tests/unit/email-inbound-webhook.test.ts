@@ -186,7 +186,7 @@ describe("Email Inbound Webhook — Ingestão e Pós-Entrada", () => {
         }
         return {};
       }),
-    } as any;
+    } as unknown as Parameters<typeof ingestEmailInbound>[0];
 
     const payload = {
       id: "resend_inbound_999",
@@ -264,7 +264,7 @@ describe("Email Inbound Webhook — Ingestão e Pós-Entrada", () => {
         }
         return {};
       }),
-    } as any;
+    } as unknown as Parameters<typeof ingestEmailInbound>[0];
 
     const payload = {
       id: "resend_inbound_duplicate",
@@ -312,7 +312,7 @@ describe("Email Inbound Webhook — Ingestão e Pós-Entrada", () => {
           eq: vi.fn().mockReturnThis(),
         }),
       })),
-    } as any;
+    } as unknown as Parameters<typeof ingestEmailInbound>[0];
 
     const input = {
       session: {

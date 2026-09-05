@@ -14,8 +14,11 @@ export default async function InboxPage({
   const activeOrg = await resolveActiveOrg(user);
   if (!activeOrg) {
     return (
-      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-        Você não tem nenhuma organização ativa. Aceite um convite ou contate o admin.
+      <div className="flex h-full flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
+        <p>Você não tem nenhuma organização ativa.</p>
+        <a href="/get-started" className="text-primary underline">
+          Criar ou configurar sua organização
+        </a>
       </div>
     );
   }

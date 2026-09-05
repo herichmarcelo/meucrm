@@ -15,7 +15,10 @@ import { authRateLimited, AUTH_LIMITS } from "@/lib/auth/rate-limit";
 import { env } from "@/lib/env";
 
 export type SignUpResult =
-  | { ok: true }
+  | {
+      ok: true;
+      sessao_ativa: boolean;
+    }
   | {
       ok: false;
       error: "validation_error" | "rate_limited" | "signup_failed";
@@ -123,5 +126,5 @@ export async function signUp(
     userAgent,
   });
 
-  return { ok: true };
+  return { ok: true, sessao_ativa: data.session !== null };
 }

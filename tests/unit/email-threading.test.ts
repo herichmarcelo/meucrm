@@ -93,7 +93,7 @@ describe("Email Channel — Ciclo Completo de Threading Bidirecional", () => {
         }
         return {};
       }),
-    } as any;
+    } as unknown as Parameters<typeof ingestEmailInbound>[0];
 
     const resInbound1 = await ingestEmailInbound(mockSupabase, {
       organizationId: "org-1",

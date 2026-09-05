@@ -10,6 +10,17 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
 
 ### Adicionado
 
+- **Onboarding Sem Confirmação de E-mail (Port v1.15.1)**:
+  - Usuários que se cadastram em ambientes ou VPS onde a confirmação de e-mail está desativada no Supabase GoTrue agora avançam imediatamente para a conclusão do cadastro da empresa (`/get-started`), eliminando a tela que instruía a aguardar um e-mail que nunca chega.
+  - Criação da Server Action `recoverOrganization` e tela `/get-started` com pré-preenchimento automático de `org_name` do signup e fallback seguro caso a organização inicial não tenha sido provisionada.
+- **Busca Unificada no Inbox por Nome, Telefone e Mensagem (Port v1.13.0)**:
+  - O campo de busca do Inbox agora localiza conversas pesquisando simultaneamente pelo nome do contato (`display_name`, `name`), número de telefone (`phone_number`) ou trecho da última mensagem (`last_message_preview`).
+  - Orçamento seguro de URLs (`ORCAMENTO_DE_IDS_NA_URL = 5000` e teto de 120 contatos) evitando erros `414 URI Too Long` no Kong e sanitização estrita de caracteres especiais (`termoSeguroParaOr`) prevenindo quebras no filtro `.or()` do PostgREST.
+- **Atendimento Manual & Pausa Automática da IA por 1 Hora (Port v1.13.0 / v1.14.0)**:
+  - Quando um atendente humano responde diretamente pelo celular no WhatsApp (seja via GOWA ou WAHA), a conversa é marcada como atendimento manual humano e a IA é automaticamente pausada por 1 hora (`silenciada_ate`), evitando que o robô atropele a conversa humana.
+  - Cada nova fala humana pelo celular renova o prazo de 1 hora sem nunca encurtar pausas manuais mais longas.
+  - Filtro aprimorado contra falsos ecos: mensagens disparadas pelo próprio CRM não acionam a pausa indevida nem geram duplicatas na conversa.
+
 - **Canal Nativo de Instagram Direct (Meta Graph API v22.0)**:
   - Integração oficial com contas profissionais do Instagram (Business e Creator vinculadas a uma Página do Facebook).
   - Webhook de entrada com validação criptográfica HMAC SHA-256 (`X-Hub-Signature-256`) e handshake `hub.challenge` em texto puro.

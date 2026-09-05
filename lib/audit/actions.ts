@@ -353,6 +353,11 @@ export const AUDIT_ACTIONS = [
   "appointment.updated",
   "appointment.status_changed",
   "appointment.cancelled",
+
+  // Recuperação do primeiro acesso (onboarding)
+  "tenant.created_by_recovery",
+  "auth.signup_provision_recovery_failed",
+  "auth.signup_provision_recusado",
 ] as const;
 
 /** Um código de auditoria. Derivado de `AUDIT_ACTIONS` — não redigite a lista. */

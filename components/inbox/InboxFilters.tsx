@@ -103,9 +103,9 @@ export function InboxFilters({ value, onChange }: Props) {
         <Input
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
-          placeholder={t("Buscar mensagens…")}
+          placeholder={t("Buscar por nome, telefone ou mensagem…")}
           className="h-8 pl-8 text-sm"
-          aria-label="Buscar conversas"
+          aria-label={t("Buscar conversas")}
         />
       </div>
 

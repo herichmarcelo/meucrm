@@ -21,6 +21,7 @@ import { ackToStatus } from "@/lib/types/messaging";
 import type { WahaEnvelope, WahaPayload } from "@/lib/waha/envelope";
 import { bareWaMessageId, chatIdFromWaMessageId } from "@/lib/waha/message-id";
 import { logger } from "@/lib/logger";
+import { pausarIaPorAtendimentoManual } from "@/lib/escalacao/atendimento-manual";
 
 type Admin = ReturnType<typeof createAdminClient>;
 
@@ -668,6 +669,44 @@ async function handleInbound(
   }
 }
 
+const JANELA_DO_ECO_MS = 60_000;
+
+async function ehEcoDeEnvioNosso(
+  admin: Admin,
+  organizationId: string,
+  conversationId: string,
+  p: WahaPayload,
+): Promise<boolean> {
+  const desde = new Date(Date.now() - JANELA_DO_ECO_MS).toISOString();
+  const { data, error } = await admin
+    .from("messages")
+    .select("id, body, type")
+    .eq("organization_id", organizationId)
+    .eq("conversation_id", conversationId)
+    .eq("direction", "outbound")
+    .in("sent_via", ["ai", "user"])
+    .is("external_id", null)
+    .in("status", ["queued", "sending"])
+    .gte("created_at", desde)
+    .limit(20);
+
+  if (error) {
+    console.error("[waha.ingest] checagem de eco falhou", error.message);
+    return false;
+  }
+
+  const corpo = (p.body ?? "").trim();
+  for (const linha of data ?? []) {
+    const l = linha as { body: string | null; type?: string | null };
+    if (p.type && p.type !== "chat") {
+      if ((l.type ?? "chat") !== "chat") return true;
+      continue;
+    }
+    if (corpo.length > 0 && (l.body ?? "").trim() === corpo) return true;
+  }
+  return false;
+}
+
 /**
  * fromMe=true: operador respondeu direto do WhatsApp dele (não pelo composer).
  * Contato = destinatário (`to`). `from` é o próprio número do operador — nunca
@@ -794,6 +833,14 @@ async function handleOutboundFromUserPhone(
   }
 
   await markConversation(admin, session.organization_id, conversationId, "outbound", previewFromMessage(p), now);
+
+  if (!(await ehEcoDeEnvioNosso(admin, session.organization_id, conversationId, p))) {
+    await pausarIaPorAtendimentoManual(admin, {
+      organizationId: session.organization_id,
+      conversationId,
+      canal: "waha",
+    });
+  }
 
   await audit({
     action: "message.sent",

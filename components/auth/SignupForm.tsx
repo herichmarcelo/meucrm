@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useForm, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useTransition, useState } from "react";
@@ -27,6 +28,7 @@ export interface ConviteDoSignup {
 }
 
 export function SignupForm({ convite }: { convite?: ConviteDoSignup }) {
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [serverError, setServerError] = useState<string | null>(null);
   const [sentTo, setSentTo] = useState<string | null>(null);
@@ -61,6 +63,12 @@ export function SignupForm({ convite }: { convite?: ConviteDoSignup }) {
         : values;
       const res = await signUp(entrada, convite?.token);
       if (res.ok) {
+        if (res.sessao_ativa) {
+          router.replace(
+            convite ? `/team/accept-invite/${convite.token}` : "/get-started",
+          );
+          return;
+        }
         setSentTo(values.email);
         return;
       }
