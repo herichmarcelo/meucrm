@@ -18,11 +18,12 @@ import { createChannelSchema } from "@/lib/schemas/channels";
 import { createClient } from "@/lib/supabase/server";
 import { getGowaClient } from "@/lib/gowa/client";
 import { getWahaClient, wahaFriendlyError } from "@/lib/waha/client";
+import { env } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
 
 export const CHANNEL_COLUMNS =
-  "id, provider, waha_session_name, gowa_device_id, display_name, phone_number, status, status_reason, last_health_check_at, last_status_change_at, daily_message_limit, is_warmup_complete, created_at";
+  "id, provider, waha_session_name, gowa_device_id, email_inbound_address, display_name, phone_number, status, status_reason, last_health_check_at, last_status_change_at, daily_message_limit, is_warmup_complete, created_at";
 
 export const CHANNEL_COLUMNS_LEGACY =
   "id, waha_session_name, display_name, phone_number, status, status_reason, last_health_check_at, last_status_change_at, daily_message_limit, is_warmup_complete, created_at";
@@ -153,10 +154,18 @@ export async function POST(req: NextRequest): Promise<Response> {
 
   if (chosenProvider === "gowa" && gowa) {
     try {
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://host.docker.internal:3000";
+      // GOWA_WEBHOOK_BASE_URL deve apontar para um endereço alcançável de DENTRO
+      // do container GOWA. Em desenvolvimento local com Docker, use
+      // http://host.docker.internal:3000. Em produção, a URL pública do app.
+      // NÃO use NEXT_PUBLIC_APP_URL aqui: ela resolve "localhost" que, de dentro
+      // do container, aponta para o próprio container e não para o Next.js.
+      const appUrl =
+        (env.GOWA_WEBHOOK_BASE_URL ?? "").trim() ||
+        "http://host.docker.internal:3000";
       const webhookUrl = `${appUrl}/api/v1/webhooks/gowa/${webhookToken}`;
-      await gowa.addDevice(sessionName, webhookUrl);
+      await gowa.addDevice(sessionName, webhookUrl, env.GOWA_WEBHOOK_SECRET || undefined);
       await gowa.loginDevice(sessionName).catch(() => null);
+
     } catch (err) {
       await supabase
         .from("channel_sessions")

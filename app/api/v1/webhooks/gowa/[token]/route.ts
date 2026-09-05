@@ -73,6 +73,7 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
 
   // Autenticação fail-closed HMAC-SHA256
   const sigHeader =
+    req.headers.get("x-webhook-signature") ??
     req.headers.get("x-hub-signature-256") ??
     req.headers.get("x-hub-signature") ??
     req.headers.get("x-signature-256");
