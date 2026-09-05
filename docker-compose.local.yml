@@ -1,0 +1,35 @@
+# Compose para execução local do DeskcommCRM (Next.js) no Docker Desktop,
+# conectado aos serviços já em execução no Docker (GOWA na porta 4000 e WAHA na 5000).
+#
+# Uso:
+#   docker compose -f docker-compose.local.yml up -d --build
+#
+# Acesso:
+#   http://localhost:3001
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP_VERSION: local
+    container_name: deskcomm-crm-app
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    env_file:
+      - .env.local
+    environment:
+      - PORT=3000
+      - HOSTNAME=0.0.0.0
+      - GOWA_BASE_URL=http://host.docker.internal:4000
+      - WAHA_API_BASE_URL=http://host.docker.internal:5000
+      - CPF_ENCRYPTION_KEY=dev_cpf_encryption_key_32_bytes_len
+      - WAHA_BYO_ENCRYPTION_KEY=dev_waha_byo_encryption_key_len
+      - AI_CRED_AES_KEY=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+      - SUPABASE_DB_URL=postgresql://postgres:postgres@host.docker.internal:5432/postgres
+      - UPSTASH_REDIS_REST_URL=http://host.docker.internal:8079
+      - UPSTASH_REDIS_REST_TOKEN=dev_token
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
