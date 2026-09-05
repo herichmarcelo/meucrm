@@ -260,7 +260,12 @@ export class GowaClient {
   }
 
   /**
-   * Envia mídia (imagem, áudio ou arquivo).
+   * Envia mídia (imagem, áudio ou arquivo) via multipart/form-data.
+   *
+   * O endpoint do GOWA espera o campo do arquivo (`image`, `audio` ou `file`)
+   * como upload multipart binário (`multipart.FileHeader` no backend Go).
+   * Baixa a mídia previamente (URL assinada do Storage ou URL externa de GIF)
+   * e monta a requisição multipart correta.
    */
   async sendMedia(
     deviceId: string,
@@ -270,30 +275,67 @@ export class GowaClient {
     caption?: string,
     filename?: string,
   ): Promise<GowaSendResult> {
+    let arrayBuffer: ArrayBuffer;
+    let contentType = "application/octet-stream";
+
+    if (mediaUrl.startsWith("data:")) {
+      const match = mediaUrl.match(/^data:([^;]+);base64,(.+)$/);
+      if (match && match[1] && match[2]) {
+        contentType = match[1];
+        const buf = Buffer.from(match[2], "base64");
+        arrayBuffer = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+      } else {
+        throw new Error("gowa_invalid_data_url");
+      }
+    } else {
+      const mediaRes = await fetch(mediaUrl, {
+        signal: AbortSignal.timeout(30_000),
+      });
+
+      if (!mediaRes.ok) {
+        throw new Error(`gowa_media_download_failed_${mediaRes.status}`);
+      }
+
+      contentType = mediaRes.headers.get("content-type") ?? contentType;
+      arrayBuffer = await mediaRes.arrayBuffer();
+    }
+
     let endpoint = "/send/file";
-    const body: Record<string, unknown> = { phone };
+    let fieldName = "file";
+    let defaultFilename = "file.bin";
 
     if (kind === "image") {
       endpoint = "/send/image";
-      body.image_url = mediaUrl;
-      body.image = mediaUrl;
-      if (caption) body.caption = caption;
+      fieldName = "image";
+      defaultFilename = contentType.includes("gif") ? "animation.gif" : "image.jpg";
     } else if (kind === "audio") {
       endpoint = "/send/audio";
-      body.audio_url = mediaUrl;
-      body.audio = mediaUrl;
-    } else {
-      endpoint = "/send/file";
-      body.file_url = mediaUrl;
-      body.file = mediaUrl;
-      if (caption) body.caption = caption;
-      if (filename) body.filename = filename;
+      fieldName = "audio";
+      defaultFilename = "audio.mp3";
+    }
+
+    const resolvedFilename = filename || defaultFilename;
+    const blob = new Blob([arrayBuffer], { type: contentType });
+
+    const formData = new FormData();
+    formData.append("phone", phone);
+    if (caption) {
+      formData.append("caption", caption);
+    }
+    formData.append(fieldName, blob, resolvedFilename);
+
+    const headers: Record<string, string> = {
+      Authorization: this.authHeader(),
+      Accept: "application/json",
+    };
+    if (deviceId) {
+      headers["X-Device-Id"] = deviceId;
     }
 
     const res = await fetch(`${this.baseUrl}${endpoint}`, {
       method: "POST",
-      headers: this.defaultHeaders(deviceId),
-      body: JSON.stringify(body),
+      headers,
+      body: formData,
     });
 
     if (!res.ok) {

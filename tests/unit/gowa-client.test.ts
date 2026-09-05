@@ -110,4 +110,56 @@ describe("GowaClient", () => {
     expect(res.buffer).toBeInstanceOf(ArrayBuffer);
     expect(res.buffer.byteLength).toBe(8);
   });
+
+  it("sendMedia baixa a URL e envia como FormData multipart", async () => {
+    // 1º fetch: download da imagem
+    const fakeImageBytes = new Uint8Array([1, 2, 3, 4]);
+    mockFetch.mockResolvedValueOnce(
+      new Response(fakeImageBytes, {
+        status: 200,
+        headers: { "content-type": "image/jpeg" },
+      }),
+    );
+
+    // 2º fetch: chamada POST para o GOWA
+    mockFetch.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          code: "SUCCESS",
+          message: "Sent",
+          results: { message_id: "MEDIA_MSG_123" },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+
+    const res = await client.sendMedia(
+      "device_1",
+      "image",
+      "5511999999999@s.whatsapp.net",
+      "https://example.com/foto.jpg",
+      "Minha Legenda",
+      "foto.jpg",
+    );
+
+    expect(res.externalId).toBe("MEDIA_MSG_123");
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+
+    // Checa chamada ao GOWA
+    const [gowaUrl, gowaOptions] = (mockFetch.mock.calls[1] ?? []) as [
+      string,
+      RequestInit & { headers: Record<string, string>; body: FormData },
+    ];
+    expect(gowaUrl).toBe("http://localhost:4000/send/image");
+    expect(gowaOptions.method).toBe("POST");
+    expect(gowaOptions.headers["X-Device-Id"]).toBe("device_1");
+    expect(gowaOptions.headers["Authorization"]).toBe("Basic YWRtaW46c2VjcmV0MTIz");
+    expect(gowaOptions.body).toBeInstanceOf(FormData);
+
+    const formData = gowaOptions.body as FormData;
+    expect(formData.get("phone")).toBe("5511999999999@s.whatsapp.net");
+    expect(formData.get("caption")).toBe("Minha Legenda");
+    const file = formData.get("image");
+    expect(file).toBeDefined();
+  });
 });
