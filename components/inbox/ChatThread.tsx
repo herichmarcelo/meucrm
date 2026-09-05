@@ -12,6 +12,7 @@ import { useDeleteNote } from "@/hooks/inbox/useDeleteNote";
 import { useDebugToggle } from "@/hooks/ai/useDebugToggle";
 import { useActiveOrg, useUser } from "@/hooks/auth/AuthProvider";
 import { ROLE_RANK } from "@/lib/auth/types";
+import { setOrderedAudioIds } from "@/components/inbox/media/audioCoordinator";
 import type { Message, Note } from "@/lib/types/messaging";
 
 interface Props {
@@ -82,6 +83,14 @@ export function ChatThread({ conversationId, onResponder }: Props) {
   useEffect(() => {
     paginasVistas.current = 0;
   }, [conversationId]);
+
+  // Notifica o coordenador de áudio sobre a ordem dos áudios na conversa para autoplay sequencial
+  useEffect(() => {
+    const audioIds = items
+      .filter((it): it is { kind: "message"; ts: string; data: Message } => it.kind === "message" && it.data.type === "audio")
+      .map((it) => it.data.id);
+    setOrderedAudioIds(audioIds);
+  }, [items]);
 
   // Rola ao fim na primeira carga e quando chega mensagem/nota nova — mas NÃO
   // quando o crescimento veio do "Carregar mais antigas".

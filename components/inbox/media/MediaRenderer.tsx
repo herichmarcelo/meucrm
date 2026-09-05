@@ -20,7 +20,13 @@ export function MediaRenderer({ message }: { message: Message }) {
     case "sticker":
       return <StickerMedia messageId={message.id} />;
     case "audio":
-      return <AudioPlayer messageId={message.id} isOutbound={isOutbound} />;
+      return (
+        <AudioPlayer
+          messageId={message.id}
+          isOutbound={isOutbound}
+          message={message}
+        />
+      );
     case "video":
       return (
         <VideoMedia
