@@ -10,6 +10,12 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
 
 ### Adicionado
 
+- **Player de Áudio Estilo WhatsApp com Avatar e Reprodução Consecutiva**:
+  - Bolha de áudio no Inbox reformulada no padrão visual nativo do WhatsApp com a bolinha de imagem da pessoa (Avatar do contato para mensagens recebidas, do atendente humano ou avatar temático de IA para mensagens enviadas).
+  - Mini ícone de microfone (`/microfone.svg`) sobreposto no canto inferior do avatar com sombra sutil.
+  - Alternância dinâmica: enquanto pausado, exibe a foto do remetente e o microfone; ao dar play (`playing`), o avatar se transforma no botão de controle de velocidade (`1x`, `1.5x`, `2x`); ao pausar ou finalizar, a foto retorna automaticamente.
+  - Utilização dos ícones vetoriais nativos em `/public/`: `/play.svg`, `/pause.svg`, `/loading.svg`, `/erro.svg` e `/microfone.svg`.
+  - Coordenador de áudio em memória (`audioCoordinator.ts`) que previne reproduções simultâneas de áudios concorrentes e implementa a reprodução automática contínua em sequência ao término de cada mensagem.
 - **Onboarding Sem Confirmação de E-mail (Port v1.15.1)**:
   - Usuários que se cadastram em ambientes ou VPS onde a confirmação de e-mail está desativada no Supabase GoTrue agora avançam imediatamente para a conclusão do cadastro da empresa (`/get-started`), eliminando a tela que instruía a aguardar um e-mail que nunca chega.
   - Criação da Server Action `recoverOrganization` e tela `/get-started` com pré-preenchimento automático de `org_name` do signup e fallback seguro caso a organização inicial não tenha sido provisionada.
