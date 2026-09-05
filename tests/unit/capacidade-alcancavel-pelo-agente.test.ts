@@ -109,6 +109,9 @@ const ESCRITA_QUE_E_TRABALHO_DE_ATENDENTE: ReadonlyArray<string> = [
   // `app/api/v1/conversation-tags` é leitura `viewer`; marcar conversa é trabalho
   // de atendente e o dano máximo é um filtro sujo, reversível na tela.
   "crm_manage_tags",
+  // `app/api/v1/appointments/` — POST/PATCH exige `viewer`/`agent`. Agendar é trabalho de atendente.
+  "crm_book_appointment",
+  "crm_update_appointment_status",
 ];
 
 function alcancavelPeloAgente(requiresRole: Role): boolean {

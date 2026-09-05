@@ -18,7 +18,7 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { CHANNEL_PROVIDER_ZERNIO } from "./capabilities";
+import { CHANNEL_PROVIDER_EMAIL, CHANNEL_PROVIDER_INSTAGRAM, CHANNEL_PROVIDER_ZERNIO } from "./capabilities";
 import { sincronizarSaudeDaConexao } from "./health";
 import {
   atualizarEspelhoDoTemplate,
@@ -29,7 +29,12 @@ import {
 import { aplicarEdicaoZernio, ingestZernioInbound } from "./zernio/ingest";
 import { lerEnvelopeZernio } from "./zernio/envelope";
 import { parseZernioEdicao, verifyZernioSignature } from "./zernio/webhook";
+import { ingestEmailInbound } from "./email/ingest";
+import { verifyEmailWebhookSignature } from "./email/webhook";
+import { ingestInstagramMessage } from "./instagram/ingest";
+import { parseInstagramWebhook, verifyInstagramSignature } from "./instagram/webhook";
 import type { ChannelProvider } from "./types";
+
 
 /** Curto demais para ser segredo — placeholder ou lixo de decrypt. */
 const MIN_SECRET_LEN = 16;
@@ -70,7 +75,11 @@ export type InboundWebhookOutcome =
  * trabalho — e respondido sem nomear provider do lado de fora.
  */
 export function acceptsInboundWebhook(provider: string): boolean {
-  return provider === CHANNEL_PROVIDER_ZERNIO;
+  return (
+    provider === CHANNEL_PROVIDER_ZERNIO ||
+    provider === CHANNEL_PROVIDER_EMAIL ||
+    provider === CHANNEL_PROVIDER_INSTAGRAM
+  );
 }
 
 export async function handleInboundWebhook(
@@ -82,6 +91,10 @@ export async function handleInboundWebhook(
   switch (provider) {
     case CHANNEL_PROVIDER_ZERNIO:
       return zernioInbound(admin, input);
+    case CHANNEL_PROVIDER_EMAIL:
+      return emailInbound(admin, input);
+    case CHANNEL_PROVIDER_INSTAGRAM:
+      return instagramInbound(admin, input);
     default:
       // Token de um canal que não entra por aqui. É configuração trocada, não
       // ataque — mas processar seria ler o payload com o parser errado.
@@ -195,3 +208,67 @@ async function zernioInbound(
   });
   return { ok: true, body: { ...r } };
 }
+
+async function emailInbound(
+  admin: SupabaseClient,
+  input: InboundWebhookInput,
+): Promise<InboundWebhookOutcome> {
+  // Verificação de assinatura/secret quando configurado
+  if (input.secret && !verifyEmailWebhookSignature(input.rawBody, input.headers, input.secret)) {
+    return { ok: false, code: "unauthorized", message: "bad_signature" };
+  }
+
+  let payload: unknown;
+  try {
+    payload = JSON.parse(input.rawBody);
+  } catch {
+    return { ok: false, code: "invalid_json", message: "invalid_json" };
+  }
+
+  const r = await ingestEmailInbound(admin, {
+    organizationId: input.session.organization_id,
+    channelSessionId: input.session.id,
+    payload,
+  });
+
+  if (r.status === "failed") {
+    return { ok: false, code: "contrato_violado", message: r.reason || "email_ingest_failed" };
+  }
+
+  return { ok: true, body: { ...r } };
+}
+
+async function instagramInbound(
+  admin: SupabaseClient,
+  input: InboundWebhookInput,
+): Promise<InboundWebhookOutcome> {
+  const appSecret = process.env.META_APP_SECRET || process.env.INSTAGRAM_APP_SECRET || input.secret || "";
+  const assinatura = input.headers.get("x-hub-signature-256");
+
+  if (appSecret && !verifyInstagramSignature(input.rawBody, assinatura, appSecret)) {
+    return { ok: false, code: "unauthorized", message: "bad_signature" };
+  }
+
+  let payload: unknown;
+  try {
+    payload = JSON.parse(input.rawBody);
+  } catch {
+    return { ok: false, code: "invalid_json", message: "invalid_json" };
+  }
+
+  const messages = parseInstagramWebhook(payload);
+  const results = [];
+
+  for (const message of messages) {
+    const r = await ingestInstagramMessage(admin, {
+      organizationId: input.session.organization_id,
+      channelSessionId: input.session.id,
+      message,
+    });
+    results.push(r);
+  }
+
+  return { ok: true, body: { count: results.length, results } };
+}
+
+

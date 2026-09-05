@@ -8,105 +8,55 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
 
 ## [Não lançado]
 
+### Adicionado
+
+- **Canal Nativo de Instagram Direct (Meta Graph API v22.0)**:
+  - Integração oficial com contas profissionais do Instagram (Business e Creator vinculadas a uma Página do Facebook).
+  - Webhook de entrada com validação criptográfica HMAC SHA-256 (`X-Hub-Signature-256`) e handshake `hub.challenge` em texto puro.
+  - Ingestão atômica com resolução de contatos por `instagram_id` (IGSID), threading de conversas 1:1, deduplicação por `external_id` (23505) e disparo de efeitos pós-entrada (IA, Realtime).
+  - `InstagramChannelAdapter` com envio via Graph API v22.0, criptografia de tokens de página (`AES-256-GCM`) e tratamento da janela de 24h da Meta.
+  - Interface dedicada em `/app/connections` (aba *Instagram*) e apresentação visual no Inbox com ícone e `@username`.
+- **Canal Nativo de E-mail para Suporte e Helpdesk (`EmailChannelAdapter`)**:
+  - Atendimento ao cliente via e-mail corporativo integrado à Resend API e webhooks Svix.
+  - Agrupamento automático de mensagens em threads RFC 5322 (`In-Reply-To`, `References`, `Message-ID`).
+  - Composer adaptativo com suporte a linha de assunto opcional (`Subject`), formatação HTML e anexos.
+  - Badges e identificação visual de e-mail no Inbox e no painel CRM lateral.
+- **Catálogo de Produtos (`catalog_products`) e Gestão Web**:
+  - Tabela `catalog_products` desacoplada com RLS (leitura `viewer`, escrita `manager`+), SKU único por organização e índice trigram.
+  - Preços estritamente em centavos inteiros (`preco_cents`, `custo_cents`) com conversão segura e proteção contra texto livre.
+  - Busca difusa por tokens (`lib/catalogo/busca.ts`) com eliminação exata de variantes em especificações numéricas.
+  - Integração com tool MCP do agente de IA (`crm_search_products`), controle de estoque e detecção de empates com desempate conversacional.
+  - Tela de gerenciamento do catálogo no frontend (`/app/catalogo`), busca em tempo real, toggle rápido de status, modal de cadastro/edição e importador CSV (`POST /api/v1/products/import`).
+- **Padronização de Diálogos de Confirmação (`ConfirmDialog`)**:
+  - Eliminação de `window.confirm()` nativo no sistema.
+  - Componente canônico `components/ui/confirm-dialog.tsx` com Radix UI, variantes destrutivas, títulos contextuais e acessibilidade.
+  - Implementado no fechamento de conversas do Inbox, cancelamento de mensagens agendadas e ações sensíveis de segurança (MFA, deslogar sessões).
+- **Sistema de Agendamentos & Tipos de Atendimento (v1.11.0)**:
+  - Tabelas `service_types` e `appointments` com RLS, multi-tenancy e índices de performance.
+  - Consciência temporal da IA com dia da semana e horário no ritual de abertura.
+  - Tools MCP `crm_list_services`, `crm_list_available_slots`, `crm_book_appointment`, `crm_update_appointment_status`.
+  - Sincronização automática com as etapas do funil de vendas (`agendamento-solicitado` / `agendado`).
+  - Tela completa de Agenda (`/app/agenda`), rotas REST `/api/v1/appointments` e `/api/v1/service-types` e card rápido no painel CRM.
+
 ## [1.4.0] — 2026-08-24
 
-Esta versão muda o primeiro acesso. Instalar deixou de ser "configurar uma IA" e passou a ser **montar um funcionário e vê-lo atender antes de terminar**: você diz como ele se chama, o jeito dele falar e as regras da casa, monta o quadro de clientes do **seu** ramo — não o de loja virtual que todo mundo ganhava igual — e, no último passo, conversa com ele como se fosse um cliente. Nada sai pelo WhatsApp; você só confere que ele funciona antes de confiar nele. Junto disso, seis causas diferentes que deixavam uma IA publicada **muda** foram medidas num servidor real e consertadas uma a uma; o sistema passou a ser usável no celular; e você pode pôr o seu nome, o seu logo e a sua cor em tudo — pela tela, sem linha de comando.
+Esta versão muda o primeiro acesso. Instalar passou a ser **montar um funcionário e vê-lo atender antes de terminar**: você define nome, tom de voz, regras da casa, quadro de clientes do seu ramo e testa a conversa antes de confiar nele. Seis causas que deixavam a IA muda foram corrigidas; o sistema passou a ser responsivo no celular; e você pode personalizar marca, logo e cores pela interface.
 
 ### ⚠️ Requer atenção
 
-**Desta vez, rodar o `update.sh` UMA vez basta — a instrução da 1.3.0 não vale mais.** A
-versão anterior pedia duas execuções porque a primeira deixava o processo que faz a IA
-atender "solto": acompanhando o desenvolvimento em vez de ficar parado na sua versão, como o
-resto do sistema. Isso acabou. A atualização agora fixa as três partes do sistema na mesma
-versão de uma vez só, e se ainda assim alguma ficar solta — é o caso de quem está vindo de
-uma versão anterior à 1.3.0 — o próprio sistema fecha essa ponta sozinho em até 5 minutos,
-sem você fazer nada. Rodar duas vezes por hábito não estraga nada: a segunda vez responde
-"você já está na versão mais recente" e não toca em nada.
+**Rodar o `update.sh` uma vez basta.** A atualização agora fixa as partes do sistema na mesma versão de uma vez só.
 
-**Antes de ligar a parada automática da IA, confira o número do seu limite.** Ele sempre foi
-em dólar, e a tela dizia real (está explicado acima). Quem escreveu "50" pensando em reais
-tem, na verdade, um limite de US$ 50 — cerca de cinco vezes maior do que imaginava. Seu
-limite não foi alterado; o que mudou é a tela finalmente dizer a verdade. Como a parada
-automática nasce desligada em todo mundo, dá tempo de olhar o número com calma antes de
-armá-la.
+**Antes de ligar a parada automática da IA, confira o valor do seu limite.** Ele sempre foi em dólar, e a tela dizia real. O limite não foi alterado; a interface passou a exibir US$.
 
-Fora isso, nada exige ação sua. O arquivo de configuração criado na sua instalação continua
-valendo como está: tudo que é novo nesta versão já vem com um valor padrão, e a própria
-atualização acrescenta o que faltar. O banco de dados também passa a se limpar sozinho a
-partir daqui, jogando fora registro técnico velho que ninguém lê — conversa, contato,
-mensagem e histórico de atendimento não são tocados, e não há nada para você configurar.
+Fora isso, nada exige ação manual. As novas configurações vêm com valores padrão e o banco de dados executa limpeza automática de logs técnicos.
 
-**Se você tem DUAS conexões oficiais do WhatsApp com a mesma conta da Meta, uma delas vai
-mudar de nome.** Era possível cadastrar a mesma conta duas vezes — numa agência com dois
-clientes, ou num número que trocou de empresa — e, enquanto isso durou, as mensagens
-recebidas eram descartadas em silêncio para as **duas**. A atualização mantém a mais antiga e
-marca a outra como conflito, acrescentando `-conflito-` ao identificador dela. **Nada é
-apagado**: se você encontrar uma conexão com esse nome, é essa a razão — confira qual das duas
-deve continuar e apague a que sobra.
-
-**Se você usou o botão "Configurar Catálogo" na tela de conhecimento, confira o que ficou
-gravado.** Ele salvava o que você escrevia como se fosse uma pergunta e resposta, não um
-catálogo — então o conteúdo está lá, mas na gaveta errada. Vale reabrir e refazer.
-
-**Se o seu sistema ainda chama a sua empresa de "Minha Empresa", troque em Configurações.** A
-instalação cria a empresa com esse nome provisório, e o primeiro acesso trazia esse texto já
-escrito no campo — quem seguiu adiante sem apagar ficou com ele. Agora o campo vem vazio, mas
-quem já passou por ali precisa corrigir à mão.
+**Se você possui duas conexões oficiais do WhatsApp com a mesma conta da Meta**, a mais antiga é mantida e a outra marcada com `-conflito-`.
 
 ### Adicionado
 
-- **Instalar deixou de ser "configurar um sistema": agora você monta um funcionário e o vê
-  atender antes de terminar.** O passo a passo do primeiro acesso foi de 4 para 6 etapas e
-  mudou de assunto. Ele abre mostrando o que a sua instalação já trouxe pronta — servidor e
-  banco de pé, qual inteligência artificial foi contratada, se o WhatsApp está pronto para
-  parear —, em vez de um formulário em branco. O antigo "Configurar IA" virou **"Treine seu
-  funcionário"**: como ele se chama, o jeito dele falar e — o campo que faltava — as regras
-  da casa (horário de atendimento, o que nunca prometer, como chamar o cliente). Ali mesmo a
-  chave da inteligência artificial é testada de verdade: não "a chave foi aceita", que um
-  provedor responde até com a conta zerada, mas uma resposta real, que é a única coisa que
-  prova que há crédito. Se a instalação veio sem chave, o campo para colar a sua está nessa
-  tela, um clique antes de o funcionário nascer com ela. Entrou o passo **"Onde ele
-  organiza"**, que monta o quadro de clientes do **seu ramo**: uma clínica termina com "Quer
-  agendar" e "Consulta marcada", em vez do quadro de loja virtual — "Carrinho abandonado",
-  "Em separação", "Enviado" — que toda instalação ganhava igual, sem nunca ter sido
-  perguntada em que ramo entrou. Você pode renomear, remover e acrescentar colunas antes de
-  gravar. E entrou o passo **"Ver ele atender"**: você escreve como se fosse um cliente e lê
-  a resposta dele antes de terminar, sem nada sair pelo WhatsApp e sem criar conversa nenhuma
-  — antes, o último clique despejava você numa caixa de conversas vazia, depois de montar um
-  funcionário que você nunca tinha visto fazer nada. O funcionário que nasce dali também é
-  outro: deixou de ser um respondedor de perguntas e já vem sabendo mexer no CRM sozinho —
-  procurar o cliente, anotar o que ele informou, criar a oportunidade no funil e mover o
-  cliente de etapa —, apontado para o funil certo e sabendo dizer o que o seu negócio faz. E,
-  no fim, em vez de te largar numa tela vazia, o sistema se apresenta: as seis partes
-  principais, cada uma com uma frase sobre o que ela faz por você.
-- **Ponha o seu nome, o seu logo e a sua cor no sistema — pela tela, sem linha de comando e
-  sem reiniciar nada.** Em *Administração › Marca*, quem é dono da instalação troca o nome do
-  sistema, escolhe a cor da marca e sobe o arquivo do logo (PNG ou JPG, até 512 KB). Salvou,
-  recarregou: a barra lateral, os botões, o destaque que aparece ao redor do campo em que você
-  está digitando, o título da aba e o ícone do navegador já estão repintados. Até esta versão,
-  a única forma de trocar a marca era editar um arquivo no servidor por linha de comando e
-  reiniciar o sistema inteiro — e quem editava o código para conseguir isso perdia a mudança
-  na atualização seguinte, quase sempre sem perceber. A cor não é aplicada crua: o sistema
-  deriva onze tons dela e mostra onde cada coisa vai pousar antes de você salvar; se a cor
-  escolhida deixaria o texto do botão ilegível no tema escuro, ele anda os degraus necessários
-  sozinho. Nada de escolher amarelo e descobrir depois que o botão ficou branco no branco. E
-  cada empresa dentro da mesma instalação pode ter a própria marca, em *Configurações ›
-  Marca*, sem depender de quem instalou o sistema: o que ela deixa em branco é herdado da
-  instalação.
-- **A sua marca sai da tela e alcança o resto do produto.** O ícone da aba do navegador (que
-  simplesmente não existia — a aba ficava sem ícone nenhum), o nome que aparece no aplicativo
-  autenticador de quem liga a verificação em duas etapas, o nome do remetente dos e-mails e,
-  principalmente, os e-mails de confirmação de conta e de recuperação de senha — que até aqui
-  chegavam ao seu cliente com o nome do nosso produto, no primeiro contato dele com o sistema.
-  O instalador também passou a perguntar a cor da marca: antes ele perguntava só o nome e
-  entregava o verde do nosso produto em toda tela e em todo e-mail de acesso, então quem
-  instalava para um cliente entregava a marca dele pintada com a cor de outro. Uma ressalva
-  que vale conhecer: os e-mails de acesso são lidos de fora do CRM, então trocar a cor pela
-  tela depois **não** reescreve esses e-mails — é a resposta dada ao instalador que faz as
-  duas pontas nascerem iguais. Uma exceção é deliberada: **o relatório de dados pessoais em
-  PDF nunca leva a sua marca.** Ele nomeia a empresa que responde legalmente pelos dados,
-  porque é um documento que atende a um direito do titular — pôr ali o nome de quem só
-  hospeda inverteria quem responde pelo quê.
+- **Onboarding interativo e humanizado:** 6 etapas configuram servidor, inteligência artificial, regras da casa, funil específico do nicho e teste de conversa em tempo real.
+- **Marca Própria (White-label) completa:** Em *Administração › Marca*, personalize nome da aplicação, logo e paleta de cores derivada com cálculo automático de contraste e temas claro/escuro.
+- **Identidade visual consistente:** Logo e nome propagados para aba do navegador, aplicativo autenticador MFA e remetente de e-mails transacionais. O relatório de dados pessoais em PDF nomeia a empresa controladora dos dados conforme a LGPD.
 - **Dá para usar o sistema pelo celular.** A barra lateral fixa era a única navegação
   existente e nunca sumia: num celular comum ela empurrava o conteúdo para fora da tela, e não
   havia botão nenhum para escondê-la. Agora ela vira uma gaveta que abre pelo topo e fecha

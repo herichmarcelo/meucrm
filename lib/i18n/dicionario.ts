@@ -46,6 +46,8 @@ export const DICIONARIO: Traducoes = {
   Radar: { es: "Radar" },
   "Respostas rápidas": { es: "Respuestas rápidas" },
   Contatos: { es: "Contactos" },
+  Catálogo: { es: "Catálogo" },
+  Agenda: { es: "Agenda" },
   // A CHAVE É O TEXTO PT-BR, então renomear um rótulo no registro de navegação
   // sem mexer aqui NÃO quebra teste nenhum — degrada em silêncio: `traduzir()`
   // devolve a chave ausente como português e o espanhol da barra lateral some.

@@ -79,6 +79,7 @@ export function InboxFilters({ value, onChange }: Props) {
   // Alternador só aparece com 2+ números — com um só não há o que alternar.
   const showChannelSwitch = (channels?.length ?? 0) >= 2 || filtroForaDaLista;
 
+
   // Debounce search input → propagate to parent.
   useEffect(() => {
     const t = setTimeout(() => {
@@ -119,9 +120,9 @@ export function InboxFilters({ value, onChange }: Props) {
             <SelectValue placeholder={t("Todos os números")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Todos os números</SelectItem>
+            <SelectItem value="all">{t("Todos os números")}</SelectItem>
             {filtroForaDaLista && value.channel_session_id != null && (
-              <SelectItem value={value.channel_session_id}>Número removido</SelectItem>
+              <SelectItem value={value.channel_session_id}>{t("Número removido")}</SelectItem>
             )}
             {channels?.map((c) => (
               <SelectItem key={c.id} value={c.id}>

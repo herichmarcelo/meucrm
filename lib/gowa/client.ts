@@ -161,14 +161,27 @@ export class GowaClient {
   }
 
   /**
-   * Baixa mídia recebida de uma mensagem do GOWA.
+   * Baixa mídia recebida de uma mensagem do GOWA ou URL externa.
    */
   async fetchInboundMedia(mediaUrlOrPath: string, deviceId?: string): Promise<{ buffer: ArrayBuffer; contentType: string }> {
     let url: string;
+    let isExternalUrl = false;
+
     if (mediaUrlOrPath.startsWith("http://") || mediaUrlOrPath.startsWith("https://")) {
       try {
         const parsed = new URL(mediaUrlOrPath);
-        url = `${this.baseUrl.replace(/\/+$/, "")}${parsed.pathname}${parsed.search}`;
+        const base = new URL(this.baseUrl);
+        const isGowaLocal =
+          parsed.hostname === base.hostname ||
+          ["localhost", "127.0.0.1", "host.docker.internal", "gowa"].includes(parsed.hostname);
+
+        if (isGowaLocal) {
+          url = `${this.baseUrl.replace(/\/+$/, "")}${parsed.pathname}${parsed.search}`;
+        } else {
+          // URL externa pública (ex: Giphy, Supabase Storage público, etc.)
+          url = mediaUrlOrPath;
+          isExternalUrl = true;
+        }
       } catch {
         url = mediaUrlOrPath;
       }
@@ -176,11 +189,12 @@ export class GowaClient {
       url = `${this.baseUrl.replace(/\/+$/, "")}/${mediaUrlOrPath.replace(/^\/+/, "")}`;
     }
 
-    const headers: Record<string, string> = {
-      Authorization: this.authHeader(),
-    };
-    if (deviceId) {
-      headers["X-Device-Id"] = deviceId;
+    const headers: Record<string, string> = {};
+    if (!isExternalUrl) {
+      headers["Authorization"] = this.authHeader();
+      if (deviceId) {
+        headers["X-Device-Id"] = deviceId;
+      }
     }
 
     const res = await fetch(url, {
@@ -269,12 +283,70 @@ export class GowaClient {
    */
   async sendMedia(
     deviceId: string,
-    kind: "image" | "file" | "audio",
+    kind: "image" | "file" | "audio" | "sticker",
     phone: string,
     mediaUrl: string,
     caption?: string,
     filename?: string,
+    mimeType?: string,
   ): Promise<GowaSendResult> {
+    const isGif =
+      mimeType === "image/gif" ||
+      (mimeType ? mimeType.toLowerCase().includes("gif") : false) ||
+      mediaUrl.toLowerCase().includes(".gif") ||
+      Boolean(filename && filename.toLowerCase().endsWith(".gif"));
+
+    const isHttpUrl = mediaUrl.startsWith("http://") || mediaUrl.startsWith("https://");
+
+    // 1. Tenta envio direto por URL para image (image_url) e sticker/gif (sticker_url)
+    if (isHttpUrl) {
+      if (kind === "sticker" || (kind === "image" && isGif)) {
+        try {
+          const form = new FormData();
+          form.append("phone", phone);
+          form.append("sticker_url", mediaUrl);
+
+          const res = await fetch(`${this.baseUrl}/send/sticker`, {
+            method: "POST",
+            headers: this.defaultHeaders(deviceId),
+            body: form,
+          });
+
+          if (res.ok) {
+            const json = await res.json();
+            return { externalId: extractGowaMessageId(json) };
+          }
+          // Se o GOWA falhar ao baixar a URL externa (ex: 404 por User-Agent em CDNs como Giphy),
+          // prossegue para o fallback seguro de upload binário via buffer.
+        } catch {
+          // prossegue para fallback
+        }
+      } else if (kind === "image") {
+        try {
+          const form = new FormData();
+          form.append("phone", phone);
+          form.append("image_url", mediaUrl);
+          if (caption) {
+            form.append("caption", caption);
+          }
+
+          const res = await fetch(`${this.baseUrl}/send/image`, {
+            method: "POST",
+            headers: this.defaultHeaders(deviceId),
+            body: form,
+          });
+
+          if (res.ok) {
+            const json = await res.json();
+            return { externalId: extractGowaMessageId(json) };
+          }
+        } catch {
+          // prossegue para fallback
+        }
+      }
+    }
+
+    // 2. Caminho de Upload Binário Multipart (para data URLs, arquivos, áudios ou fallback de CDN)
     let arrayBuffer: ArrayBuffer;
     let contentType = "application/octet-stream";
 
@@ -300,14 +372,21 @@ export class GowaClient {
       arrayBuffer = await mediaRes.arrayBuffer();
     }
 
+    const isDetectedGif = isGif || contentType.includes("gif");
     let endpoint = "/send/file";
     let fieldName = "file";
     let defaultFilename = "file.bin";
+    let allowCaption = true;
 
-    if (kind === "image") {
+    if (kind === "sticker" || (kind === "image" && isDetectedGif)) {
+      endpoint = "/send/sticker";
+      fieldName = "sticker";
+      defaultFilename = isDetectedGif ? "animated.gif" : "sticker.webp";
+      allowCaption = false;
+    } else if (kind === "image") {
       endpoint = "/send/image";
       fieldName = "image";
-      defaultFilename = contentType.includes("gif") ? "animation.gif" : "image.jpg";
+      defaultFilename = "image.jpg";
     } else if (kind === "audio") {
       endpoint = "/send/audio";
       fieldName = "audio";
@@ -319,7 +398,7 @@ export class GowaClient {
 
     const formData = new FormData();
     formData.append("phone", phone);
-    if (caption) {
+    if (caption && allowCaption) {
       formData.append("caption", caption);
     }
     formData.append(fieldName, blob, resolvedFilename);
@@ -348,8 +427,114 @@ export class GowaClient {
   }
 
   /**
-   * Realiza logout do device no WhatsApp preservando o slot registrado.
+   * Envia um vídeo via GOWA, com suporte opcional a gif_playback.
+   *
+   * Quando `gifPlayback: true`, o WhatsApp exibe o vídeo como GIF animado em loop
+   * nativo — equivalente ao que o app oficial faz para GIFs do Giphy.
+   *
+   * Tenta primeiro envio direto por URL (video_url). Se o GOWA não conseguir
+   * baixar o MP4 da CDN (User-Agent bloqueado, Content-Type rejeitado), faz
+   * fallback: baixa os bytes no CRM e reenvia como upload multipart binário.
+   *
+   * NOTA: assume que a URL já é MP4 válido. Se a origem for upload arbitrário
+   * de `.gif` (não do seletor do Giphy), não haverá variante MP4 disponível —
+   * nesse caso seria necessário conversão via ffmpeg no servidor (não implementado).
    */
+  async sendVideo(
+    deviceId: string,
+    phone: string,
+    mediaUrl: string,
+    options: { gifPlayback?: boolean } = {},
+  ): Promise<GowaSendResult> {
+    const isHttpUrl = mediaUrl.startsWith("http://") || mediaUrl.startsWith("https://");
+
+    // 1. Tenta envio direto por video_url (mais eficiente — GOWA baixa direto)
+    if (isHttpUrl) {
+      try {
+        const form = new FormData();
+        form.append("phone", phone);
+        form.append("video_url", mediaUrl);
+        if (options.gifPlayback) {
+          form.append("gif_playback", "true");
+        }
+
+        const res = await fetch(`${this.baseUrl}/send/video`, {
+          method: "POST",
+          headers: this.defaultHeaders(deviceId),
+          body: form,
+        });
+
+        if (res.ok) {
+          const json = await res.json();
+          return { externalId: extractGowaMessageId(json) };
+        }
+        // Se o GOWA falhar ao baixar a URL externa (CDN bloqueando o user-agent do Go,
+        // Content-Type recusado etc.), prossegue para o fallback de upload binário.
+      } catch {
+        // prossegue para fallback
+      }
+    }
+
+    // 2. Fallback: baixa o MP4 com headers completos do Node e reenvia como buffer
+    let arrayBuffer: ArrayBuffer;
+
+    if (mediaUrl.startsWith("data:")) {
+      const match = mediaUrl.match(/^data:([^;]+);base64,(.+)$/);
+      if (match && match[2]) {
+        const buf = Buffer.from(match[2], "base64");
+        arrayBuffer = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+      } else {
+        throw new Error("gowa_invalid_data_url");
+      }
+    } else {
+      const mediaRes = await fetch(mediaUrl, {
+        signal: AbortSignal.timeout(30_000),
+        headers: {
+          // Headers completos para contornar CDNs que bloqueiam user-agents não-browser
+          "User-Agent": "Mozilla/5.0 (compatible; DeskcommCRM/1.0)",
+          Accept: "video/mp4,video/*;q=0.9,*/*;q=0.8",
+        },
+      });
+
+      if (!mediaRes.ok) {
+        throw new Error(`gowa_video_download_failed_${mediaRes.status}`);
+      }
+
+      arrayBuffer = await mediaRes.arrayBuffer();
+    }
+
+    const blob = new Blob([arrayBuffer], { type: "video/mp4" });
+    const formData = new FormData();
+    formData.append("phone", phone);
+    formData.append("video", blob, "animacao.mp4");
+    if (options.gifPlayback) {
+      formData.append("gif_playback", "true");
+    }
+
+    const headers: Record<string, string> = {
+      Authorization: this.authHeader(),
+      Accept: "application/json",
+    };
+    if (deviceId) {
+      headers["X-Device-Id"] = deviceId;
+    }
+
+    const res = await fetch(`${this.baseUrl}/send/video`, {
+      method: "POST",
+      headers,
+      body: formData,
+    });
+
+    if (!res.ok) {
+      const errorText = await res.text().catch(() => "");
+      throw new Error(`gowa_send_video_${res.status}: ${errorText.slice(0, 200)}`);
+    }
+
+    const json = await res.json();
+    return { externalId: extractGowaMessageId(json) };
+  }
+
+
   async logoutDevice(deviceId: string): Promise<void> {
     const res = await fetch(`${this.baseUrl}/devices/${encodeURIComponent(deviceId)}/logout`, {
       method: "POST",

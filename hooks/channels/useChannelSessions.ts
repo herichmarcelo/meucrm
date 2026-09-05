@@ -8,6 +8,7 @@ export interface ChannelSession {
   provider?: string | null;
   waha_session_name: string | null;
   gowa_device_id?: string | null;
+  email_inbound_address?: string | null;
   display_name: string | null;
   phone_number: string | null;
   status: string;
@@ -30,9 +31,18 @@ export type ConnectionHealth = "connected" | "connecting" | "down" | "none" | "u
 export function channelLabel(
   c: Pick<ChannelSession, "display_name" | "phone_number" | "waha_session_name"> & {
     gowa_device_id?: string | null;
+    email_inbound_address?: string | null;
+    provider?: string | null;
   },
 ): string {
-  return c.display_name || c.phone_number || c.waha_session_name || c.gowa_device_id || "Número sem nome";
+  return (
+    c.display_name ||
+    c.phone_number ||
+    c.email_inbound_address ||
+    c.waha_session_name ||
+    c.gowa_device_id ||
+    (c.provider === "email" ? "Canal de E-mail" : "Canal sem nome")
+  );
 }
 
 /**

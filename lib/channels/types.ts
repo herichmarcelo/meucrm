@@ -9,7 +9,23 @@ import type { OutboundMedia } from "@/lib/waha/media-send";
 
 export type { OutboundMedia };
 
-export type ChannelProvider = "waha" | "meta_cloud" | "zernio" | "gowa";
+export type ChannelProvider = "waha" | "meta_cloud" | "zernio" | "gowa" | "email" | "instagram";
+
+export type ChannelKind = "whatsapp" | "email" | "instagram";
+
+export const CHANNEL_KIND: Record<ChannelProvider, ChannelKind> = {
+  waha: "whatsapp",
+  meta_cloud: "whatsapp",
+  zernio: "whatsapp",
+  gowa: "whatsapp",
+  email: "email",
+  instagram: "instagram",
+};
+
+export function channelKindOf(provider: ChannelProvider | string | null | undefined): ChannelKind {
+  if (!provider) return "whatsapp";
+  return (CHANNEL_KIND as Record<string, ChannelKind>)[provider] ?? "whatsapp";
+}
 
 export interface ChannelCapabilities {
   /** Pode enviar texto livre a qualquer momento? false = exige template fora da janela. */
@@ -61,6 +77,12 @@ export interface RecipientInput {
    * `waIdentity.startsWith("lid:")` — justo o caso que a regra protege.
    */
   waLid?: string | null | undefined;
+  /** Endereço de e-mail do contato (para canais que endereçam por e-mail). */
+  email?: string | null | undefined;
+  /** ID do Instagram / IGSID do contato. */
+  instagramId?: string | null | undefined;
+  /** Handle do Instagram (@usuario) do contato. */
+  instagramUsername?: string | null | undefined;
 }
 
 /** Contato compartilhado (vcard) — só `kind: "contact"`. */

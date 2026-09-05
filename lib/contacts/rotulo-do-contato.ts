@@ -30,6 +30,7 @@ export interface ContatoNomeavel {
   display_name?: string | null;
   name?: string | null;
   phone_number?: string | null;
+  email?: string | null;
 }
 
 /** Quando não há nada apresentável. Um literal, não quatro. */
@@ -79,6 +80,9 @@ export function rotuloDoContato(c: ContatoNomeavel | null | undefined): string {
   // identificador para a regra de nome, e é informação ÚTIL para quem atende —
   // muito melhor que "Sem nome".
   if (tel !== "") return tel;
+
+  const mail = (c.email ?? "").trim();
+  if (mail !== "") return mail;
 
   return SEM_NOME;
 }

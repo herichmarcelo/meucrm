@@ -85,12 +85,15 @@ Detalham schema SQL e payloads exatos. **Consulte antes de modelar qualquer cois
 |---|---|
 | [`ARQUITETURA_WAHA.md`](ARQUITETURA_WAHA.md) | **Arquitetura WAHA** — integração HTTP REST, engine NOWEB, sessões e webhooks |
 | [`ARQUITETURA_GOWA.md`](ARQUITETURA_GOWA.md) | **Arquitetura GOWA** — integração Go WhatsApp Web MultiDevice, sessões e webhooks |
+| [`ARQUITETURA_INSTAGRAM.md`](ARQUITETURA_INSTAGRAM.md) | **Arquitetura Instagram Direct** — integração oficial Meta Graph API v22.0, webhooks HMAC SHA-256, IGSID e janela 24h |
+| [`ARQUITETURA_CANAL_EMAIL.md`](ARQUITETURA_CANAL_EMAIL.md) | **Arquitetura Canal de E-mail** — suporte e helpdesk via Resend, webhooks Svix, threading RFC 5322 e composer com assunto |
 | [`ARQUITETURA_FOTOS_PERFIL.md`](ARQUITETURA_FOTOS_PERFIL.md) | **Sincronização de Fotos de Perfil** — ciclo de vida, WAHA/GOWA, bucket `whatsapp-media` e LGPD |
 | [`ARQUITETURA_MIDIAS_INBOUND_STORAGE.md`](ARQUITETURA_MIDIAS_INBOUND_STORAGE.md) | **Persistência de Mídias Inbound (Supabase Storage)** — áudios, imagens, vídeos, documentos, streaming resiliente e persistência oportunista |
 | [`ARQUITETURA_MENSAGENS_AGENDADAS.md`](ARQUITETURA_MENSAGENS_AGENDADAS.md) | **Mensagens Agendadas** — ciclo de vida, tabela `scheduled_messages`, placeholders dinâmicos, scheduler worker e UI |
 | [`ARQUITETURA_FUSO_E_FORMATO_HORA.md`](ARQUITETURA_FUSO_E_FORMATO_HORA.md) | **Fuso Horário & Formato de Hora (24h / 12h)** — fusos regionais (Campo Grande/MS), preferências do perfil e propagação global |
 | [`ARQUITETURA_ASSINATURA_CONVERSA.md`](ARQUITETURA_ASSINATURA_CONVERSA.md) | **Assinatura na Conversa** — identificação de atendente humano nas bolhas do WhatsApp (`*{assinatura}:*`), isolamento de IA e perfil |
 | [`ARQUITETURA_NOME_VS_DISPLAY_NAME.md`](ARQUITETURA_NOME_VS_DISPLAY_NAME.md) | **Nome vs Display Name** — precedência do nome verificado no CRM (`name`) sobre pushName do WhatsApp (`display_name`) e sincronização |
+| [`ARQUITETURA_CATALOGO_PRODUTOS.md`](ARQUITETURA_CATALOGO_PRODUTOS.md) | **Catálogo de Produtos** — tabela `catalog_products`, precificação em centavos, busca por token, parser seguro e tool MCP de comércio |
 | [`doctrine/sistema-vivo.md`](doctrine/sistema-vivo.md) | **Doutrina do Sistema Vivo — a LEI.** 7 invariantes + regra do tempo + Living System Checklist (item 13 do DoD) |
 | [`doctrine/sistema-vivo/`](doctrine/sistema-vivo/README.md) | **Manual do Sistema Vivo** — 8 capítulos plugáveis (princípio universal + aplicação de referência). O *porquê* de cada invariante, e como adotar a doutrina em outro sistema |
 | [`doctrine/restricao-de-canal.md`](doctrine/restricao-de-canal.md) | Auto-restrição × hetero-restrição de canais externos; contrato de parâmetros derivado |

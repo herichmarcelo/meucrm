@@ -29,6 +29,7 @@ import {
   ArrowsClockwise,
   CheckCircle,
   CircleNotch,
+  EnvelopeSimple,
   PencilSimple,
   Phone,
   Plus,
@@ -315,10 +316,14 @@ export function ConnectionsClient({
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <Phone size={16} className="text-muted-foreground" aria-hidden />
+                      {c.provider === "email" ? (
+                        <EnvelopeSimple size={16} className="text-muted-foreground" aria-hidden />
+                      ) : (
+                        <Phone size={16} className="text-muted-foreground" aria-hidden />
+                      )}
                       <span className="truncate text-sm font-medium">{channelLabel(c)}</span>
                       <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-muted text-muted-foreground uppercase font-semibold">
-                        {c.provider === "gowa" ? "GOWA" : c.provider === "waha" ? "WAHA" : c.provider ?? "WA"}
+                        {c.provider === "email" ? "E-MAIL" : c.provider === "gowa" ? "GOWA" : c.provider === "waha" ? "WAHA" : c.provider ?? "WA"}
                       </span>
                       <Button
                         variant="ghost"
@@ -334,6 +339,11 @@ export function ConnectionsClient({
                     {c.phone_number && c.display_name && (
                       <p className="mt-0.5 font-mono text-xs text-muted-foreground">
                         {c.phone_number}
+                      </p>
+                    )}
+                    {c.email_inbound_address && c.display_name && (
+                      <p className="mt-0.5 font-mono text-xs text-muted-foreground">
+                        {c.email_inbound_address}
                       </p>
                     )}
                   </div>

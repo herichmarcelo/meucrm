@@ -81,6 +81,28 @@ export const CHANNEL_CAPABILITIES: Record<ChannelProvider, ChannelCapabilities> 
     groups: "full",
     costPerMessage: false,
   },
+  // Canal de E-mail: sem restrição de janela 24h, sem templates obrigatórios, sem risco de ban de número
+  email: {
+    freeformOutsideWindow: true,
+    requiresTemplates: false,
+    canManageTemplates: false,
+    banRisk: false,
+    minIntervalMs: null,
+    voiceNote: "server-convert",
+    groups: "none",
+    costPerMessage: false,
+  },
+  // Canal de Instagram Direct (Meta Graph API): janela de 24h da Meta para mensagens diretas
+  instagram: {
+    freeformOutsideWindow: false,
+    requiresTemplates: false,
+    canManageTemplates: false,
+    banRisk: false,
+    minIntervalMs: null,
+    voiceNote: "server-convert",
+    groups: "none",
+    costPerMessage: false,
+  },
 };
 
 /**
@@ -103,6 +125,8 @@ export const CHANNEL_PROVIDER_WAHA: ChannelProvider = "waha";
 export const CHANNEL_PROVIDER_META: ChannelProvider = "meta_cloud";
 export const CHANNEL_PROVIDER_ZERNIO: ChannelProvider = "zernio";
 export const CHANNEL_PROVIDER_GOWA: ChannelProvider = "gowa";
+export const CHANNEL_PROVIDER_EMAIL: ChannelProvider = "email";
+export const CHANNEL_PROVIDER_INSTAGRAM: ChannelProvider = "instagram";
 
 export function capabilitiesOf(provider: ChannelProvider): ChannelCapabilities {
   const caps = CHANNEL_CAPABILITIES[provider];
@@ -111,3 +135,4 @@ export function capabilitiesOf(provider: ChannelProvider): ChannelCapabilities {
   if (!caps) throw new Error(`unknown_channel_provider: ${provider}`);
   return caps;
 }
+

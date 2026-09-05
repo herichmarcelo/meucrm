@@ -11,6 +11,7 @@ export interface ContactSummary {
   display_name: string | null;
   name: string | null;
   phone_number: string | null;
+  email?: string | null;
   tags: string[];
   is_blocked: boolean;
   is_anonymized: boolean;
@@ -35,6 +36,7 @@ export interface ContactSummary {
  * da resposta e qual número ela vai ver respondendo.
  */
 export interface ChannelSummary {
+  id?: string;
   phone_number: string | null;
   display_name: string | null;
   /**
@@ -44,6 +46,7 @@ export interface ChannelSummary {
    * que a doutrina proíbe, e ele mora atrás do seam.
    */
   provider: string | null;
+  email_inbound_address?: string | null;
 }
 
 export type ConversationWithContact = Conversation & {

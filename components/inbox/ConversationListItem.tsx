@@ -1,10 +1,12 @@
 "use client";
 import { format, formatDistanceToNowStrict } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Phone, Robot } from "@/lib/ui/icons";
+import { EnvelopeSimple, InstagramLogo, Phone, Robot } from "@/lib/ui/icons";
+
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { channelKindOf } from "@/lib/channels/types";
 import type { ConversationWithContact } from "@/hooks/inbox/useConversationsRealtime";
 import { rotuloDoContato } from "@/lib/contacts/rotulo-do-contato";
 import { useTempo } from "@/lib/tempo/TempoProvider";
@@ -87,7 +89,8 @@ export function ConversationListItem({
   // dois canais é o que decide o tom da resposta e qual número a pessoa vê
   // respondendo. Cai no nome do canal quando não há número (canal recém-criado).
   const canal = conversation.channel_sessions ?? null;
-  const rotuloCanal = canal?.phone_number ?? canal?.display_name ?? null;
+  const kind = channelKindOf(canal?.provider);
+  const rotuloCanal = canal?.phone_number ?? canal?.email_inbound_address ?? canal?.display_name ?? (kind === "email" ? "E-mail" : null);
 
   return (
     <button
@@ -173,7 +176,13 @@ export function ConversationListItem({
               className="h-4 gap-1 px-1.5 text-[10px] font-normal text-muted-foreground"
               title={`Entrou por ${rotuloCanal}`}
             >
-              <Phone size={9} weight="regular" aria-hidden />
+              {kind === "email" ? (
+                <EnvelopeSimple size={9} weight="regular" aria-hidden />
+              ) : kind === "instagram" ? (
+                <InstagramLogo size={9} weight="regular" aria-hidden />
+              ) : (
+                <Phone size={9} weight="regular" aria-hidden />
+              )}
               {rotuloCanal}
             </Badge>
           )}

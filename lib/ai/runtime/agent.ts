@@ -337,7 +337,7 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
       const { data: convRaw } = await admin
         .from("conversations")
         .select(
-          `id, group_chat_id, is_group, contacts:contact_id(phone_number, wa_identity, wa_lid), channel_sessions:channel_session_id(${CHANNEL_SESSION_REF_COLUMNS})`,
+          `id, group_chat_id, is_group, contacts:contact_id(phone_number, wa_identity, wa_lid, email), channel_sessions:channel_session_id(${CHANNEL_SESSION_REF_COLUMNS})`,
         )
         .eq("id", run.conversation_id)
         .eq("organization_id", run.organization_id)
@@ -346,7 +346,7 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
         id: string;
         group_chat_id: string | null;
         is_group: boolean;
-        contacts: { phone_number: string | null; wa_identity: string | null; wa_lid: string | null } | null;
+        contacts: { phone_number: string | null; wa_identity: string | null; wa_lid: string | null; email: string | null } | null;
         channel_sessions: ChannelSessionRef | null;
       } | null;
       if (conv) {
@@ -359,6 +359,7 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
           phoneNumber: conv.contacts?.phone_number,
           waIdentity: conv.contacts?.wa_identity,
           waLid: conv.contacts?.wa_lid,
+          email: conv.contacts?.email,
         });
       }
     }

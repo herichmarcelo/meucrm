@@ -25,7 +25,7 @@ import { describe, expect, it } from "vitest";
 import { detectarVazamentoInterno } from "@/lib/agent-engine/guardrails/vazamento-interno";
 import { CHANNEL_CAPABILITIES } from "@/lib/channels/capabilities";
 
-const PROVIDERS = Object.keys(CHANNEL_CAPABILITIES);
+const PROVIDERS = Object.keys(CHANNEL_CAPABILITIES).filter((p) => p !== "email");
 
 describe("nome de provider de canal é vazamento", () => {
   /**

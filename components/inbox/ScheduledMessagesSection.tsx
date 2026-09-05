@@ -17,6 +17,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { DateTimePicker } from "@/components/ui/date-time-picker";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Clock, ClockCounterClockwise, X, PencilSimple, Sparkle, Calendar } from "@/lib/ui/icons";
 import {
   useScheduledMessages,
@@ -101,6 +102,7 @@ function ScheduledMessageModal({
   const [selectedDays, setSelectedDays] = useState<number[]>([1, 2, 3, 4, 5]); // Seg a Sex default
   const [recurringTime, setRecurringTime] = useState("09:00");
   const [durationWeeks, setDurationWeeks] = useState<number>(2); // 2 semanas default
+  const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -237,13 +239,6 @@ function ScheduledMessageModal({
     }
 
     onOpenChange(false);
-  };
-
-  const handleCancel = async () => {
-    if (confirm("Tem certeza que deseja cancelar esta mensagem agendada?")) {
-      await cancelMutation.mutateAsync({ id: message.id, contact_id: contactId });
-      onOpenChange(false);
-    }
   };
 
   const isSaving = updateMutation.isPending || createMutation.isPending || cancelMutation.isPending;
@@ -473,7 +468,7 @@ function ScheduledMessageModal({
               size="sm"
               className="w-full sm:w-auto text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
               disabled={isSaving}
-              onClick={handleCancel}
+              onClick={() => setConfirmCancelOpen(true)}
             >
               <X size={13} className="mr-1" />
               Cancelar Agendamento
@@ -518,6 +513,20 @@ function ScheduledMessageModal({
           </div>
         </DialogFooter>
       </DialogContent>
+      <ConfirmDialog
+        open={confirmCancelOpen}
+        onOpenChange={setConfirmCancelOpen}
+        title="Cancelar mensagem agendada?"
+        description="Esta mensagem agendada não será enviada ao contato. O cancelamento não pode ser desfeito."
+        confirmLabel="Cancelar Mensagem"
+        variant="destructive"
+        loading={cancelMutation.isPending}
+        onConfirm={async () => {
+          await cancelMutation.mutateAsync({ id: message.id, contact_id: contactId });
+          setConfirmCancelOpen(false);
+          onOpenChange(false);
+        }}
+      />
     </Dialog>
   );
 }
@@ -533,6 +542,7 @@ export function ScheduledMessagesSection({
   const cancelMutation = useCancelScheduledMessage();
   const { formatarDataHora } = useTempo();
   const [selectedMessage, setSelectedMessage] = useState<ScheduledMessage | null>(null);
+  const [cancelingMessageId, setCancelingMessageId] = useState<string | null>(null);
 
   const pendingCount = messages.filter((m) => m.status === "pending").length;
 
@@ -555,11 +565,9 @@ export function ScheduledMessagesSection({
     return null;
   }
 
-  const handleQuickCancel = async (e: React.MouseEvent, id: string) => {
+  const handleQuickCancel = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    if (confirm("Tem certeza que deseja cancelar esta mensagem agendada?")) {
-      await cancelMutation.mutateAsync({ id, contact_id: contactId });
-    }
+    setCancelingMessageId(id);
   };
 
   return (
@@ -631,7 +639,7 @@ export function ScheduledMessagesSection({
                 </div>
 
                 <p className="mt-1.5 line-clamp-2 text-xs text-muted-foreground leading-relaxed">
-                  {m.raw_body}
+                  {renderScheduledPlaceholders(m.raw_body, { nome: contactName })}
                 </p>
 
                 {m.template && (
@@ -661,6 +669,22 @@ export function ScheduledMessagesSection({
           contactName={contactName}
         />
       )}
+
+      <ConfirmDialog
+        open={Boolean(cancelingMessageId)}
+        onOpenChange={(open) => !open && setCancelingMessageId(null)}
+        title="Cancelar mensagem agendada?"
+        description="Esta mensagem agendada não será enviada ao contato. O cancelamento não pode ser desfeito."
+        confirmLabel="Cancelar Mensagem"
+        variant="destructive"
+        loading={cancelMutation.isPending}
+        onConfirm={async () => {
+          if (cancelingMessageId) {
+            await cancelMutation.mutateAsync({ id: cancelingMessageId, contact_id: contactId });
+            setCancelingMessageId(null);
+          }
+        }}
+      />
     </section>
   );
 }

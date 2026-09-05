@@ -47,7 +47,7 @@ export function InboxKeyboardShortcuts({
   useHotkeys(
     "e",
     () => {
-      if (confirm("Fechar conversa?")) onClose();
+      onClose();
     },
     { enabled, preventDefault: true },
   );

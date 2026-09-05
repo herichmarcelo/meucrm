@@ -4,7 +4,7 @@ import { POST } from "@/app/api/v1/webhooks/gowa/route";
 
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: vi.fn(() => ({
-    from: vi.fn((table: string) => ({
+    from: vi.fn((_table: string) => ({
       select: vi.fn(() => ({
         or: vi.fn(() => ({
           is: vi.fn(() => ({
@@ -81,4 +81,65 @@ describe("POST /api/v1/webhooks/gowa", () => {
     const res = await POST(req);
     expect(res.status).toBe(400);
   });
+
+  it("aceita webhook assinado com header X-Webhook-Signature oficial do GOWA", async () => {
+    const secret = "a3fb8a95-da13-4577-8f9d-3f84854eac89";
+    vi.stubEnv("GOWA_WEBHOOK_SECRET", secret);
+
+    const payload = {
+      event: "message.ack",
+      device_id: "dev-123",
+      payload: {
+        id: "msg-ack-100",
+        status: "DELIVERED",
+      },
+    };
+    const bodyStr = JSON.stringify(payload);
+    const crypto = await import("node:crypto");
+    const signature = crypto.createHmac("sha256", secret).update(bodyStr).digest("hex");
+
+    const req = new NextRequest("http://localhost:3000/api/v1/webhooks/gowa", {
+      method: "POST",
+      body: bodyStr,
+      headers: {
+        "Content-Type": "application/json",
+        "X-Webhook-Signature": signature,
+      },
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.data.accepted).toBe(true);
+  });
+
+  it("rejeita com 401 quando header X-Webhook-Signature do GOWA é adulterado", async () => {
+    const secret = "a3fb8a95-da13-4577-8f9d-3f84854eac89";
+    vi.stubEnv("GOWA_WEBHOOK_SECRET", secret);
+
+    const payload = {
+      event: "message.ack",
+      device_id: "dev-123",
+      payload: {
+        id: "msg-ack-101",
+        status: "READ",
+      },
+    };
+    const bodyStr = JSON.stringify(payload);
+
+    const req = new NextRequest("http://localhost:3000/api/v1/webhooks/gowa", {
+      method: "POST",
+      body: bodyStr,
+      headers: {
+        "Content-Type": "application/json",
+        "X-Webhook-Signature": "deadbeef00000000000000000000000000000000000000000000000000000000",
+      },
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(401);
+    const json = await res.json();
+    expect(json.error.code).toBe("unauthorized");
+  });
 });
+

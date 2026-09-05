@@ -23,6 +23,7 @@ import { CRMSidePanel } from "./CRMSidePanel";
 import type { Message as ConversationMensagem } from "@/lib/types/messaging";
 import { InboxKeyboardShortcuts } from "./InboxKeyboardShortcuts";
 import { ShortcutsHelpDialog } from "./ShortcutsHelpDialog";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 // ADR-05: ícone de feature sai do mapa canônico, nunca do pacote direto.
 import { CaretLeft, IdentificationCard } from "@/lib/ui/icons";
 import { Button } from "@/components/ui/button";
@@ -204,10 +205,11 @@ export function InboxLayout({ initialSelectedId = null }: InboxLayoutProps = {})
       expected_assignee: selectedConversation.assigned_to_user_id,
     });
   }, [claim, selectedConversation]);
+  const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
   const handleClose = useCallback(() => {
     if (!selectedConversation) return;
-    close.mutate({ conversation_id: selectedConversation.id });
-  }, [close, selectedConversation]);
+    setCloseConfirmOpen(true);
+  }, [selectedConversation, setCloseConfirmOpen]);
 
   // A janela vence SOZINHA com a aba aberta. Sem este relógio, quem deixa o
   // inbox aberto a tarde inteira seguiria com o composer liberado numa conversa
@@ -392,6 +394,8 @@ export function InboxLayout({ initialSelectedId = null }: InboxLayoutProps = {})
               respondendo={respondendo}
               onCancelarResposta={() => setRespondendo(null)}
               currentContactId={selectedConversation.contact_id}
+              channel={selectedConversation.channel}
+              channelProvider={selectedConversation.channel_sessions?.provider ?? null}
             />
           </>
         ) : selectionNotFound ? (
@@ -419,6 +423,20 @@ export function InboxLayout({ initialSelectedId = null }: InboxLayoutProps = {})
         onToggleHelp={() => setHelpOpen((v) => !v)}
       />
       <ShortcutsHelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
+      <ConfirmDialog
+        open={closeConfirmOpen}
+        onOpenChange={setCloseConfirmOpen}
+        title="Fechar conversa?"
+        description="A conversa será movida para a aba de conversas fechadas. Caso o cliente envie uma nova mensagem, ela será reaberta automaticamente."
+        confirmLabel="Fechar Conversa"
+        loading={close.isPending}
+        onConfirm={async () => {
+          if (selectedConversation) {
+            await close.mutateAsync({ conversation_id: selectedConversation.id });
+          }
+          setCloseConfirmOpen(false);
+        }}
+      />
     </div>
   );
 }

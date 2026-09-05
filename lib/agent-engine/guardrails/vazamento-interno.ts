@@ -134,7 +134,7 @@ const PALAVRAS_ARQUITETURA = [
  * mentindo. `lib/channels/capabilities.ts` importa só tipos — não arrasta peso
  * para dentro deste módulo puro.
  */
-const PROVIDERES_DE_CANAL = Object.keys(CHANNEL_CAPABILITIES);
+const PROVIDERES_DE_CANAL = Object.keys(CHANNEL_CAPABILITIES).filter((p) => p !== "email" && p !== "instagram");
 
 /**
  * (C) PAPEL/PERMISSÃO — o vocabulário de controle de acesso. Nenhuma destas é palavra

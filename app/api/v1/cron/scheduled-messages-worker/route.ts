@@ -22,6 +22,7 @@ import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { env } from "@/lib/env";
 import { renderScheduledPlaceholders } from "@/lib/inbox/scheduled-placeholders";
+import { rotuloDoContato } from "@/lib/contacts/rotulo-do-contato";
 import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -162,7 +163,7 @@ export async function processDueScheduledMessages(
       }
 
       // 5. Interpola os placeholders no momento real do envio
-      const contactDisplayName = contact.name || contact.display_name || null;
+      const contactDisplayName = rotuloDoContato(contact);
       const renderedBody = renderScheduledPlaceholders(msg.raw_body, {
         nome: contactDisplayName,
         dataHoraEnvio: now,

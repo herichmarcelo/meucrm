@@ -74,6 +74,12 @@ describe("rotuloDoContato", () => {
     );
   });
 
+  it("o E-MAIL vale mais que 'Sem nome' quando não há telefone nem nome", () => {
+    expect(
+      rotuloDoContato({ display_name: null, name: null, phone_number: null, email: "cliente@empresa.com" }),
+    ).toBe("cliente@empresa.com");
+  });
+
   it("sem nada apresentável, UM literal — não quatro", () => {
     expect(rotuloDoContato({ display_name: null, name: null, phone_number: null })).toBe(SEM_NOME);
     expect(rotuloDoContato({ display_name: "   ", name: "", phone_number: "" })).toBe(SEM_NOME);

@@ -80,6 +80,8 @@ export {
   // conversation
   ChatCircle,
   Phone,
+  EnvelopeSimple,
+  EnvelopeSimple as Envelope,
   Paperclip,
   Microphone,
   Image as ImageIcon,
@@ -117,6 +119,9 @@ export {
   Key,
   UserCircle,
   ClockCounterClockwise,
+  // canais sociais
+  InstagramLogo,
   // inbox no celular: voltar para a lista e abrir a ficha do contato
   IdentificationCard,
 } from "@phosphor-icons/react/dist/ssr";
+

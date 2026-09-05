@@ -8,6 +8,12 @@ export interface OutboundMedia {
   mime: string;
   filename?: string | null;
   caption?: string | null;
+  /**
+   * Quando `true`, indica que este vídeo deve ser exibido como GIF animado
+   * em loop no WhatsApp (flag `gif_playback` no endpoint /send/video do GOWA).
+   * Só relevante quando `kind === "video"` e o conteúdo é um MP4 derivado de GIF.
+   */
+  gifPlayback?: boolean;
 }
 
 export interface WahaSendPlan {

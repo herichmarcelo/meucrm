@@ -28,12 +28,19 @@ import { Resend } from "resend";
 
 import { env } from "@/lib/env";
 
-interface SendArgs {
+export interface SendArgs {
   to: string | string[];
   subject: string;
   html: string;
   text?: string;
   replyTo?: string;
+  headers?: Record<string, string>;
+  attachments?: Array<{
+    content?: string | Buffer;
+    filename?: string | false | undefined;
+    path?: string;
+    contentType?: string;
+  }>;
   tags?: { name: string; value: string }[];
   /**
    * Nome de exibição do remetente — a marca resolvida (`marcaDaSaida().nome`).
@@ -42,7 +49,7 @@ interface SendArgs {
   fromName?: string;
 }
 
-interface SendResult {
+export interface SendResult {
   ok: boolean;
   id?: string;
   error?: "not_configured" | "send_failed" | "rate_limited" | "dominio_nao_verificado";
@@ -115,6 +122,8 @@ export async function sendEmail(args: SendArgs): Promise<SendResult> {
       html: args.html,
       text: args.text,
       replyTo: args.replyTo,
+      headers: args.headers,
+      attachments: args.attachments,
       tags: args.tags,
     });
 

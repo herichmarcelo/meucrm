@@ -5,7 +5,7 @@
  * Persiste a foto no bucket privado `whatsapp-media` em `{org_id}/avatars/{contact_id}.jpg`.
  * Respeita regras de privacidade e LGPD (invariante de anonimização e rollback para storage_redaction_queue).
  */
-import { DEFAULT_CHANNEL_PROVIDER, getAdapter, type ChannelProvider } from "@/lib/channels";
+import { DEFAULT_CHANNEL_PROVIDER, getAdapter, type ChannelAdapter, type ChannelProvider } from "@/lib/channels";
 import { CHANNEL_SESSION_REF_COLUMNS, resolveSessionRef, type ChannelSessionRef } from "@/lib/channels/session-ref";
 import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -65,30 +65,25 @@ export function resolveChatIdFromContact(waIdentity: string | null, phoneNumber?
 /**
  * Executa o download da imagem a partir da URL retornada pelo provider adapter.
  */
-async function fetchAvatarImageBuffer(url: string, provider?: ChannelProvider): Promise<Buffer | null> {
+async function fetchAvatarImageBuffer(
+  url: string,
+  adapter: ChannelAdapter,
+  organizationId: string,
+  sessionRef: string,
+): Promise<Buffer | null> {
   try {
-    const headers: Record<string, string> = {};
-    if (
-      provider === "waha" &&
-      process.env.WAHA_API_KEY &&
-      process.env.WAHA_API_BASE_URL &&
-      url.startsWith(process.env.WAHA_API_BASE_URL)
-    ) {
-      headers["X-Api-Key"] = process.env.WAHA_API_KEY;
-    } else if (
-      provider === "gowa" &&
-      process.env.GOWA_API_BASE_URL &&
-      url.startsWith(process.env.GOWA_API_BASE_URL)
-    ) {
-      const user = (process.env.GOWA_API_USER ?? "").trim();
-      const pass = (process.env.GOWA_API_PASS ?? "").trim();
-      if (user) {
-        headers["Authorization"] = `Basic ${Buffer.from(`${user}:${pass}`).toString("base64")}`;
+    if (adapter.fetchInboundMedia) {
+      const media = await adapter.fetchInboundMedia({
+        organizationId,
+        sessionRef,
+        url,
+      });
+      if (media.buffer && media.buffer.byteLength > 0 && media.buffer.byteLength <= MAX_AVATAR_BYTES) {
+        return media.buffer;
       }
     }
 
     const res = await fetch(url, {
-      headers,
       cache: "no-store",
       signal: AbortSignal.timeout(20_000),
     });
@@ -219,7 +214,7 @@ export async function syncContactAvatar(input: SyncAvatarInput): Promise<SyncAva
   }
 
   // 4. Download do buffer da imagem
-  const imageBuffer = await fetchAvatarImageBuffer(profilePictureUrl, provider);
+  const imageBuffer = await fetchAvatarImageBuffer(profilePictureUrl, adapter, organizationId, sessionRef);
   if (!imageBuffer) {
     await carimbar(null);
     return { success: false, reason: "download_failed", path: null };

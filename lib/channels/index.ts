@@ -2,7 +2,9 @@
  * A porta de entrada do seam. Feature nenhuma importa `lib/waha/*` direto —
  * pede o adapter do provider da conversa e o descritor de capabilities.
  */
+import { emailAdapter } from "./adapters/email";
 import { gowaAdapter } from "./adapters/gowa";
+import { instagramAdapter } from "./adapters/instagram";
 import { metaCloudAdapter } from "./adapters/meta-cloud";
 import { wahaAdapter } from "./adapters/waha";
 import { zernioAdapter } from "./adapters/zernio";
@@ -13,7 +15,10 @@ const ADAPTERS: Record<ChannelProvider, ChannelAdapter | null> = {
   meta_cloud: metaCloudAdapter,
   zernio: zernioAdapter,
   gowa: gowaAdapter,
+  email: emailAdapter,
+  instagram: instagramAdapter,
 };
+
 
 /**
  * Fail-closed: provider sem adapter (ou fora da matriz) lança em vez de cair no
@@ -28,9 +33,11 @@ export function getAdapter(provider: ChannelProvider): ChannelAdapter {
 export { capabilitiesOf, CHANNEL_CAPABILITIES, DEFAULT_CHANNEL_PROVIDER } from "./capabilities";
 export { CHANNEL_SESSION_REF_COLUMNS, resolveSessionRef } from "./session-ref";
 export type { ChannelSessionRef } from "./session-ref";
+export { CHANNEL_KIND, channelKindOf } from "./types";
 export type {
   ChannelAdapter,
   ChannelCapabilities,
+  ChannelKind,
   ChannelProvider,
   OutboundEnvelope,
   OutboundKind,

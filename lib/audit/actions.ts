@@ -338,6 +338,21 @@ export const AUDIT_ACTIONS = [
   "scheduled_message.updated",
   "scheduled_message.cancelled",
   "scheduled_message.sent",
+
+  // Catálogo de Produtos
+  "catalog_product.created",
+  "catalog_product.updated",
+  "catalog_product.deleted",
+  "catalog_product.imported",
+
+  // Tipos de Atendimento e Agendamentos
+  "service_type.created",
+  "service_type.updated",
+  "service_type.deleted",
+  "appointment.created",
+  "appointment.updated",
+  "appointment.status_changed",
+  "appointment.cancelled",
 ] as const;
 
 /** Um código de auditoria. Derivado de `AUDIT_ACTIONS` — não redigite a lista. */

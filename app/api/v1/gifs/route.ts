@@ -22,7 +22,14 @@ export interface GiphyGifItem {
   id: string;
   title: string;
   preview_url: string; // Miniatura otimizada para a grade
-  url: string;         // URL original do GIF para envio no WhatsApp
+  /**
+   * URL para envio pelo WhatsApp via GOWA.
+   * Prioriza MP4 (para `/send/video?gif_playback=true`, que entrega GIF animado nativo).
+   * Fallback: URL .gif original (usado caso nenhum MP4 esteja disponível na resposta do Giphy).
+   */
+  url: string;
+  /** `true` quando `url` é um MP4 e deve ser enviado como gif_playback pelo canal. */
+  is_mp4: boolean;
   width: number;
   height: number;
 }
@@ -70,17 +77,26 @@ export async function GET(req: NextRequest): Promise<Response> {
           gif.images.downsized_medium?.url ||
           gif.images.original.url;
 
-        const sendUrl =
-          gif.images.original.url ||
-          gif.images.downsized_large?.url ||
-          gif.images.downsized?.url ||
-          preview;
+        // Prioriza MP4 para envio animado nativo via /send/video + gif_playback=true.
+        // O Giphy expõe o MP4 da animação completa em gif.images.original.mp4.
+        // Não assumimos o nome do campo: testamos em ordem de preferência.
+        const mp4Url =
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (gif.images.original as any).mp4 ||
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (gif.images as any).original_mp4?.url ||
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (gif.images.downsized_large as any)?.mp4 ||
+          null;
+
+        const sendUrl = mp4Url || gif.images.original.url || gif.images.downsized_large?.url || gif.images.downsized?.url || preview;
 
         return {
           id: String(gif.id),
           title: gif.title || "GIF",
           preview_url: preview,
           url: sendUrl,
+          is_mp4: Boolean(mp4Url),
           width: gif.images.fixed_width?.width || 200,
           height: gif.images.fixed_width?.height || 200,
         };

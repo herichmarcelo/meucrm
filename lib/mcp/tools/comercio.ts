@@ -9,8 +9,10 @@
  * Service role bypassa RLS: TODA query filtra `organization_id` manualmente, e a
  * fonte é sempre `ctx.organizationId` (token/cookie), NUNCA o input.
  */
+import type { PostgrestError } from "@supabase/supabase-js";
 import { z } from "zod";
 
+import { ordenarPorRelevancia } from "@/lib/catalogo/busca";
 import type { McpToolDefinition } from "../types";
 
 // ---------------------------------------------------------------------------
@@ -62,7 +64,7 @@ export const crmListContactOrders: McpToolDefinition<typeof pedidosInputShape> =
 // ---------------------------------------------------------------------------
 
 const produtosInputShape = {
-  termo: z.string().trim().min(2).describe("Parte do nome do produto."),
+  termo: z.string().trim().min(1).describe("Nome, código/SKU, marca, modelo ou especificações do produto."),
   limite: z.number().int().min(1).max(20).optional().default(10),
   somente_disponiveis: z.boolean().optional().default(true),
 };
@@ -70,32 +72,79 @@ const produtosInputShape = {
 export const crmSearchProducts: McpToolDefinition<typeof produtosInputShape> = {
   name: "crm_search_products",
   description:
-    "Busca produtos do catálogo da loja por parte do nome. Devolve preço, quantidade disponível " +
-    "e link. Use para responder preço e disponibilidade com o dado da loja em vez de estimar.",
+    "Busca produtos no catálogo oficial da organização. Devolve preço exato (preco_cents), " +
+    "código, estoque e detalhes. O preço retornado é o valor exato — NUNCA estime de memória. " +
+    "Se houver empate entre variantes, pergunte ao cliente qual ele prefere.",
   inputSchema: produtosInputShape,
   category: "read",
   requiresRole: "agent",
   requiresScope: "mcp:read",
   handler: async (input, ctx) => {
-    let q = ctx.supabase
-      .from("nuvemshop_products")
-      .select("id, external_id, title, description, price_cents, available_qty, url, image_url")
+    const { data, error } = (await ctx.supabase
+      .from("catalog_products" as unknown as "orders")
+      .select(
+        "id, codigo, nome, descricao, marca, categoria, preco_cents, moeda, custo_cents, " +
+        "controla_estoque, quantidade, ativo, imagem_url",
+      )
       .eq("organization_id", ctx.organizationId)
-      .ilike("title", `%${input.termo}%`)
-      .limit(input.limite);
+      .eq("ativo", true)) as unknown as {
+      data: Array<{
+        id: string;
+        codigo: string;
+        nome: string;
+        descricao: string | null;
+        marca: string | null;
+        categoria: string | null;
+        preco_cents: number;
+        moeda: string;
+        custo_cents: number | null;
+        controla_estoque: boolean;
+        quantidade: number;
+        ativo: boolean;
+        imagem_url: string | null;
+      }> | null;
+      error: PostgrestError | null;
+    };
 
-    // Oferecer o que está sem estoque é pior que não achar: o cliente ouve um
-    // sim e recebe um não depois.
-    if (input.somente_disponiveis) q = q.gt("available_qty", 0);
-
-    const { data, error } = await q;
     if (error) throw new Error(`buscar_produtos_falhou: ${error.message}`);
 
+    let lista = data ?? [];
+
+    if (input.somente_disponiveis) {
+      // Exclui apenas produtos com controla_estoque = true e quantidade = 0.
+      // Produtos com controla_estoque = false sempre aparecem.
+      lista = lista.filter((p) => !p.controla_estoque || p.quantidade > 0);
+    }
+
+    const ranqueados = ordenarPorRelevancia(lista, input.termo);
+
+    if (ranqueados.length === 0) {
+      return {
+        produtos: [],
+        instrucao:
+          "Nenhum produto correspondente foi encontrado no catálogo. NUNCA invente preços ou itens. " +
+          "Informe cordialmente ao cliente que não localizou o produto ou pergunte por mais especificações.",
+      };
+    }
+
+    const topNota = ranqueados[0]?.nota ?? 0;
+    const empatados = ranqueados.filter((r) => r.nota === topNota);
+    const empate = empatados.length > 1;
+
+    const limite = input.limite ?? 10;
+    const produtos = ranqueados.slice(0, limite).map((r) => ({
+      ...r.produto,
+      relevancia: Number(r.nota.toFixed(2)),
+    }));
+
     return {
-      produtos: data ?? [],
-      ...(data && data.length === 0
-        ? { aviso: input.somente_disponiveis ? "nada com esse nome em estoque" : "nada com esse nome no catálogo" }
-        : {}),
+      produtos,
+      empate,
+      instrucao: empate
+        ? "Existem múltiplos produtos compatíveis com a mesma relevância máxima. " +
+          "NUNCA escolha sozinho: pergunte ao cliente qual variante/modelo específico ele deseja."
+        : "O preço retornado é o valor exato — nunca invente descontos ou estime valores de memória.",
     };
   },
 };
+

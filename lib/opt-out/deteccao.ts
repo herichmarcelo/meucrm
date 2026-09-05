@@ -50,11 +50,6 @@ export function normalizarTexto(texto: string): string {
     .replace(/[\u0300-\u036f]/gu, "");
 }
 
-/**
- * Palavra-chave enviada SOZINHA (mensagem inteira = a palavra) — a convenção
- * universal de descadastro em canais de mensagem. A comparação é feita sobre o
- * texto normalizado e sem pontuação de borda, para "STOP." e "SAIR!" contarem.
- */
 export const PALAVRAS_DE_OPT_OUT: ReadonlySet<string> = new Set([
   "stop",
   "parar",
@@ -65,22 +60,6 @@ export const PALAVRAS_DE_OPT_OUT: ReadonlySet<string> = new Set([
   "remover",
   "unsubscribe",
   // ── espanhol ──────────────────────────────────────────────────────────────
-  //
-  // `baja` não é preferência de vocabulário: é a palavra que a PLANTILLA pede.
-  // Medido numa instalação em espanhol — 6 das 9 definições aprovadas terminam
-  // com "Respondé BAJA para no recibir más", todas da categoria MARKETING:
-  //
-  //   "Baja"                              14/08   bloqueado: NÃO
-  //   "Doy de baja la pauta?"             12/08   bloqueado: NÃO
-  //   "quiero dar de baja la suscripcion" 02/08   bloqueado: NÃO
-  //
-  // Três pessoas pediram, nenhuma foi atendida — e a promessa está escrita na
-  // mensagem que a empresa mandou, com aprovação da plataforma. No canal onde
-  // denúncia de spam derruba o quality rating e faz a plataforma recusar
-  // definições novas: perde-se as aprovadas, não só a linha.
-  //
-  // `baja` sozinha É o pedido. "Doy de baja la pauta?" tem quatro palavras e
-  // cai no ambíguo, que é onde deve cair.
   "baja",
   "bajar",
   "desuscribir",
@@ -110,10 +89,15 @@ const VERBOS_DE_COMUNICACAO =
  */
 const FRASES_DE_OPT_OUT: readonly RegExp[] = [
   // "pare de me mandar", "parar de receber", "para de mandar mensagem"
-  new RegExp(`\\bpar(?:ar|a|e|em)\\s+de\\s+(?:me\\s+)?(?:${VERBOS_DE_COMUNICACAO})\\b`, "u"),
+  // (?!...) exclui objetos de pedido/entrega/endereço para não bloquear cliente que pede alteração comercial
+  new RegExp(
+    `\\bpar(?:ar|a|e|em)\\s+de\\s+(?:me\\s+)?(?:${VERBOS_DE_COMUNICACAO})\\b` +
+      "(?!\\s+(?:o|a|os|as|meu|minha|meus|minhas|esse|essa|este|esta|nesse|nessa|neste|nesta)?\\s*(?:pedido|pedidos|entrega|entregas|encomenda|encomendas|pacote|pacotes|boleto|boletos|fatura|faturas|medicamento|medicamentos|remedio|remedios|endereco|enderecos|comprovante|comprovantes|chave|chaves)\\b)",
+    "u",
+  ),
   // "não quero (mais) receber" — mas "não quero receber ligação, só whatsapp" é
   // troca de canal, não descadastro: quem diz isso QUER continuar no WhatsApp.
-  /\bnao\s+(?:quero|desejo|gostaria)\s+(?:de\s+)?(?:mais\s+)?receber\b(?!\s+(?:ligacao|ligacoes|chamada|chamadas|telefonema|telefonemas|telefone)\b)/u,
+  /\bnao\s+(?:quero|desejo|gostaria)\s+(?:de\s+)?(?:mais\s+)?receber\b(?!\s+(?:ligacao|ligacoes|chamada|chamadas|telefonema|telefonemas|telefone|o\s+pedido|a\s+entrega|nesse\s+endereco)\b)/u,
   /\bnao\s+quero\s+receber\s+mais\b/u,
   /\bnao\s+quero\s+mais\s+(?:mensagem|mensagens|contato|nada\s+de\s+voces)\b/u,
   /\bnao\s+me\s+(?:mande|manda|mandem|envie|envia|enviem|chame|chama|ligue|liga)\s+mais\b/u,
@@ -124,28 +108,25 @@ const FRASES_DE_OPT_OUT: readonly RegExp[] = [
   /\bdescadastro\b/u,
   // ── espanhol ──────────────────────────────────────────────────────────────
   //
-  // Mesma regra das de cima: TODAS exigem o objeto de comunicação. Sem isso
-  // "no quiero recibir la factura por aqui, manda por email" bloquearia um
-  // cliente que está pedindo justamente para CONTINUAR sendo atendido.
-  // O `(?!…)` é o mesmo recurso que a regra portuguesa usa para "ligação": o
-  // verbo sozinho não basta, porque o OBJETO pode ser outro. Medido — sem ele,
-  // "no quiero recibir la factura por aqui, manda por email" bloqueava um
-  // cliente que está pedindo justamente para CONTINUAR sendo atendido.
+  // "deja de escribirme", "dejen de mandar"
+  new RegExp(
+    `\\bdej(?:ar|a|e|en|as)\\s+de\\s+(?:me\\s+)?(?:${VERBOS_DE_COMUNICACAO}|escribirme)\\b` +
+      "(?!\\s+(?:la|el|los|las|mi|mis)?\\s*(?:factura|facturas|boleta|boletas|pedido|pedidos|entrega|paquete|comprobante)\\b)",
+    "u",
+  ),
   new RegExp(
     `\\bno\\s+(?:quiero|deseo)\\s+(?:mas\\s+)?(?:${VERBOS_DE_COMUNICACAO})\\b` +
       "(?!\\s+(?:la|el|los|las|mi|mis)?\\s*(?:factura|facturas|boleta|boletas|presupuesto|" +
-      "presupuestos|recibo|recibos|comprobante|comprobantes|llamada|llamadas|contrato|contratos)\\b)",
+      "presupuestos|recibo|recibos|comprobante|comprobantes|llamada|llamadas|contrato|contratos|pedido|pedidos)\\b)",
     "u",
   ),
   /\bno\s+quiero\s+recibir\s+mas\b/u,
+  /\bno\s+quiero\s+mas\s+mensajes\b/u,
   /\bno\s+me\s+(?:escriba|escriban|escribas|mande|manden|mandes|llame|llamen)\s+mas\b/u,
-  // "dar de baja" já É o pedido — a plantilla usa a palavra nesse sentido.
-  /\b(?:dar|darme|doy)\s+de\s+baja\s+(?:la\s+)?(?:suscripcion|lista|publicidad|promociones)\b/u,
-  /\bdarme\s+de\s+baja\b/u,
+  // "dar de baja" já É o pedido quando reflexivo (dame/darme de baja) ou com objeto de comunicação
+  /\b(?:dar|darme|dame|doy|den|denme)\s+de\s+baja\s+(?:de\s+)?(?:la\s+)?(?:suscripcion|lista|publicidad|promociones|mensajes)\b/u,
+  /\b(?:darme|dame|denme)\s+de\s+baja\b/u,
   /\bme\s+desuscrib\w*\b/u,
-  // `lista` sozinha vale, MENOS quando o que vem depois diz que é outra lista.
-  // Medido: sem a exclusão, "sacame de la lista de espera" bloqueava alguém que
-  // quer continuar sendo atendido.
   /\b(?:sacame|sacar|quitame|quitar|borrame|borrar|elimina|eliminame)\s+de\s+(?:la\s+)?lista\b(?!\s+de\s+(?:espera|precios|invitados))/u,
   /\bsalir\s+de\s+(?:la\s+)?lista\b(?!\s+de\s+(?:espera|precios|invitados))/u,
   /\bcancelar\s+(?:la\s+)?(?:suscripcion|inscripcion)\b/u,
@@ -160,6 +141,11 @@ const FRASES_AMBIGUAS_DE_OPT_OUT: readonly RegExp[] = [
   /\bja\s+(?:disse|falei)\s+que\s+nao\s+(?:quero|tenho\s+interesse)\b/u,
   /\bnao\s+(?:me\s+)?interessa\s+mais\b/u,
   /\bpara\s+com\s+isso\b/u,
+  // espanhol ambíguo
+  /\bdejame\s+(?:en\s+paz|tranquilo|tranquila)\b/u,
+  /\bno\s+me\s+interesa\s+mas\b/u,
+  /\bbasta\s+ya\b/u,
+  /\bya\s+dije\s+que\s+no\b/u,
 ];
 
 /** A mensagem inteira é a palavra-chave (ignorando pontuação e emoji de borda). */

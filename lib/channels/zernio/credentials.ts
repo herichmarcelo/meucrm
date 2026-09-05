@@ -54,7 +54,7 @@ export interface ZernioCredsLookup {
  * outro lugar sem editar código.
  */
 export function zernioBaseUrl(): string {
-  return process.env.ZERNIO_API_BASE_URL || "https://zernio.com/api";
+  return (process.env.ZERNIO_API_BASE_URL || "").trim() || "https://zernio.com/api";
 }
 
 /**

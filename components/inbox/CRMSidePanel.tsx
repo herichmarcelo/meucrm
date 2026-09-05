@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
-import { Tag, Receipt, Users, ArrowRight } from "@/lib/ui/icons";
+import { Tag, Receipt, Users, ArrowRight, Calendar, Plus } from "@/lib/ui/icons";
 import { apiClient } from "@/lib/api/client";
 import { toast } from "sonner";
 import type { ConversationWithContact } from "@/hooks/inbox/useConversationsRealtime";
@@ -18,6 +18,7 @@ import { ContactTagsEditor } from "./ContactTagsEditor";
 import { ScheduledMessagesSection } from "./ScheduledMessagesSection";
 import { useDefaultPipeline } from "@/hooks/pipelines/useDefaultPipeline";
 import { NewLeadDialog } from "@/components/kanban/NewLeadDialog";
+import { AppointmentFormDialog, type AppointmentRow } from "@/components/agenda/AppointmentFormDialog";
 import { cn } from "@/lib/utils";
 import { rotuloDoContato } from "@/lib/contacts/rotulo-do-contato";
 
@@ -228,6 +229,8 @@ export function CRMSidePanel({ conversation }: Props) {
   const [orders, setOrders] = useState<OrderRow[] | null>(null);
   const [activities, setActivities] = useState<ActivityRow[] | null>(null);
   const [demandas, setDemandas] = useState<DemandaRow[] | null>(null);
+  const [appointments, setAppointments] = useState<AppointmentRow[] | null>(null);
+  const [appointmentDialogOpen, setAppointmentDialogOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   /**
    * O TERCEIRO ESTADO. Antes existiam dois — carregando e "tem N itens" — e a
@@ -255,6 +258,7 @@ export function CRMSidePanel({ conversation }: Props) {
       setOrders(null);
       setActivities(null);
       setDemandas(null);
+      setAppointments(null);
       return;
     }
     let cancelled = false;
@@ -266,23 +270,27 @@ export function CRMSidePanel({ conversation }: Props) {
     // (medido: role=anon com gerente logado). Ver o cabeçalho da rota.
     async function load() {
       try {
-        const r = await apiClient.get<{
-          data: {
-            leads: LeadRow[];
-            orders: OrderRow[];
-            activities: ActivityRow[];
-            demandas: DemandaRow[];
-          };
-        }>(`/api/v1/contacts/${contactId}/crm-summary`);
+        const [r, appRes] = await Promise.all([
+          apiClient.get<{
+            data: {
+              leads: LeadRow[];
+              orders: OrderRow[];
+              activities: ActivityRow[];
+              demandas: DemandaRow[];
+            };
+          }>(`/api/v1/contacts/${contactId}/crm-summary`),
+          apiClient
+            .get<{ data: { appointments: AppointmentRow[] } }>(
+              `/api/v1/appointments?contact_id=${contactId}&limit=5`,
+            )
+            .catch(() => null),
+        ]);
         if (cancelled) return;
         setLeads(r.data.leads);
         setOrders(r.data.orders);
         setActivities(r.data.activities);
-        // `?? []` e não `?? null`: aqui a leitura DEU CERTO. Cair em `null`
-        // faria a lista vazia se disfarçar do terceiro estado e o painel
-        // mostraria esqueleto para sempre num contato sem demanda aberta —
-        // que é o caso saudável.
         setDemandas(r.data.demandas ?? []);
+        setAppointments(appRes?.data?.appointments ?? []);
       } catch {
         if (cancelled) return;
         // Falha NÃO vira lista vazia. Os dados ficam `null` e o painel diz que
@@ -292,6 +300,7 @@ export function CRMSidePanel({ conversation }: Props) {
         setOrders(null);
         setActivities(null);
         setDemandas(null);
+        setAppointments(null);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -343,6 +352,9 @@ export function CRMSidePanel({ conversation }: Props) {
           <div className="font-medium">{displayName}</div>
           {contact?.phone_number && (
             <div className="text-xs text-muted-foreground">{contact.phone_number}</div>
+          )}
+          {contact?.email && (
+            <div className="text-xs text-muted-foreground">{contact.email}</div>
           )}
           {tags.length > 0 && (
             <div className="flex flex-wrap gap-1">
@@ -536,6 +548,74 @@ export function CRMSidePanel({ conversation }: Props) {
       <Separator />
 
       <section>
+        <div className="flex items-center justify-between">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Agendamentos
+          </h3>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-6 gap-1 px-1.5 text-xs"
+            onClick={() => setAppointmentDialogOpen(true)}
+          >
+            <Plus size={11} aria-hidden />
+            Agendar
+          </Button>
+        </div>
+        {sectionsLoading ? (
+          <Skeleton className="mt-2 h-14 w-full" />
+        ) : appointments && appointments.length > 0 ? (
+          <ul className="mt-2 space-y-1.5">
+            {appointments.map((ap) => (
+              <li
+                key={ap.id}
+                className="flex items-center justify-between rounded-md border border-border p-2 text-xs"
+              >
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1 truncate font-medium">
+                    <Calendar size={11} weight="regular" aria-hidden />
+                    {new Date(ap.scheduled_at).toLocaleString("pt-BR", {
+                      day: "2-digit",
+                      month: "2-digit",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </div>
+                  <div className="text-muted-foreground">
+                    {ap.service_types?.name || "Atendimento"} · {ap.duration_minutes} min
+                  </div>
+                </div>
+                <Badge
+                  variant={
+                    ap.status === "confirmed"
+                      ? "default"
+                      : ap.status === "no_show"
+                      ? "destructive"
+                      : "secondary"
+                  }
+                  className="text-[10px]"
+                >
+                  {ap.status === "pending"
+                    ? "Pendente"
+                    : ap.status === "confirmed"
+                    ? "Confirmado"
+                    : ap.status === "attended"
+                    ? "Compareceu"
+                    : ap.status === "no_show"
+                    ? "Faltou"
+                    : "Cancelado"}
+                </Badge>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <SemLista vazio="Sem agendamentos." erro={erro} onTentarDeNovo={() => setTentativa((n) => n + 1)} />
+        )}
+      </section>
+
+      <Separator />
+
+      <section>
         <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Atividade
         </h3>
@@ -573,6 +653,14 @@ export function CRMSidePanel({ conversation }: Props) {
           <SemLista vazio="Sem atividade." erro={erro} onTentarDeNovo={() => setTentativa((n) => n + 1)} />
         )}
       </section>
+
+      <AppointmentFormDialog
+        open={appointmentDialogOpen}
+        onOpenChange={setAppointmentDialogOpen}
+        appointment={null}
+        defaultContactId={contactId}
+        onSaved={recarregar}
+      />
     </aside>
   );
 }

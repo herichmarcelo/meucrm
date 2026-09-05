@@ -56,8 +56,31 @@ export const gowaAdapter: ChannelAdapter = {
     }
 
     if (envelope.media) {
+      // GIF animado do Giphy: enviado como vídeo MP4 com gif_playback=true.
+      // /send/sticker extrai só o primeiro frame — não usar para GIF animado.
+      if (envelope.media.gifPlayback === true) {
+        const res = await client.sendVideo(
+          deviceId,
+          recipient,
+          envelope.media.url,
+          { gifPlayback: true },
+        );
+        return { externalId: res.externalId };
+      }
+
+      const isGif =
+        envelope.kind === "sticker" ||
+        envelope.media.mime === "image/gif" ||
+        (envelope.media.filename && envelope.media.filename.toLowerCase().endsWith(".gif")) ||
+        envelope.media.url.toLowerCase().includes(".gif");
       const mediaKind =
-        envelope.kind === "image" ? "image" : envelope.kind === "audio" ? "audio" : "file";
+        isGif
+          ? "sticker"
+          : envelope.kind === "image"
+            ? "image"
+            : envelope.kind === "audio"
+              ? "audio"
+              : "file";
       const res = await client.sendMedia(
         deviceId,
         mediaKind,
@@ -65,11 +88,13 @@ export const gowaAdapter: ChannelAdapter = {
         envelope.media.url,
         envelope.media.caption ?? envelope.body,
         envelope.media.filename ?? undefined,
+        envelope.media.mime ?? undefined,
       );
       return { externalId: res.externalId };
     }
 
     // Fallback texto
+
     const res = await client.sendText(
       deviceId,
       recipient,

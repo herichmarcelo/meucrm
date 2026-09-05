@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { RecoveryCodesPanel } from "@/components/auth/RecoveryCodesPanel";
 import { MfaEnrollModal } from "@/components/auth/MfaEnrollModal";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { regenerateRecoveryCodes } from "@/app/actions/settings/regenerateRecoveryCodes";
 import { signOutEverywhere } from "@/app/actions/settings/signOutEverywhere";
 import {
@@ -32,29 +33,40 @@ export function SecurityClient({
   const [ativando, setAtivando] = useState(false);
   const [mexendo, startMexer] = useTransition();
 
-  function handleRegenerate() {
-    if (
-      !confirm(
-        "Gerar novos códigos invalida TODOS os atuais. Tem certeza?",
-      )
-    ) {
-      return;
-    }
+  const [confirmRegenerateOpen, setConfirmRegenerateOpen] = useState(false);
+  const [confirmSignOutAllOpen, setConfirmSignOutAllOpen] = useState(false);
+  const [confirmDisableMfaOpen, setConfirmDisableMfaOpen] = useState(false);
+
+  function executeRegenerate() {
     startTransition(async () => {
       const r = await regenerateRecoveryCodes();
       if (r.ok) {
         setCodes(r.recovery_codes);
         toast.success("Novos códigos gerados.");
+        setConfirmRegenerateOpen(false);
       } else {
         toast.error(`Erro: ${r.error}`);
       }
     });
   }
 
-  function handleSignOutAll() {
-    if (!confirm("Sair de TODOS os dispositivos? Você precisará fazer login de novo.")) return;
+  function executeSignOutAll() {
     startSignOut(async () => {
       await signOutEverywhere();
+      setConfirmSignOutAllOpen(false);
+    });
+  }
+
+  function executeDisableMfa() {
+    startMexer(async () => {
+      const r = await desativarMfaDaConta();
+      if (!r.ok) {
+        toast.error(r.erro);
+        return;
+      }
+      toast.success("Verificação desligada.");
+      setConfirmDisableMfaOpen(false);
+      window.location.reload();
     });
   }
 
@@ -97,18 +109,7 @@ export function SecurityClient({
                 variant="outline"
                 size="sm"
                 disabled={mexendo}
-                onClick={() => {
-                  if (!confirm("Desligar a verificação em duas etapas desta conta?")) return;
-                  startMexer(async () => {
-                    const r = await desativarMfaDaConta();
-                    if (!r.ok) {
-                      toast.error(r.erro);
-                      return;
-                    }
-                    toast.success("Verificação desligada.");
-                    window.location.reload();
-                  });
-                }}
+                onClick={() => setConfirmDisableMfaOpen(true)}
               >
                 {mexendo ? "Desligando…" : "Desligar"}
               </Button>
@@ -172,7 +173,7 @@ export function SecurityClient({
           <Button
             variant="outline"
             disabled={!mfaEnrolled || isPending}
-            onClick={handleRegenerate}
+            onClick={() => setConfirmRegenerateOpen(true)}
           >
             {isPending ? "Gerando…" : "Regenerar códigos de recuperação"}
           </Button>
@@ -192,11 +193,43 @@ export function SecurityClient({
         <Button
           variant="outline"
           disabled={isSigningOut}
-          onClick={handleSignOutAll}
+          onClick={() => setConfirmSignOutAllOpen(true)}
         >
           {isSigningOut ? "Saindo…" : "Sair de todos os dispositivos"}
         </Button>
       </Card>
+
+      <ConfirmDialog
+        open={confirmRegenerateOpen}
+        onOpenChange={setConfirmRegenerateOpen}
+        title="Regenerar códigos de recuperação?"
+        description="Gerar novos códigos de recuperação invalida imediatamente TODOS os códigos anteriores. Certifique-se de salvar os novos códigos gerados."
+        confirmLabel="Gerar Novos Códigos"
+        loading={isPending}
+        onConfirm={executeRegenerate}
+      />
+
+      <ConfirmDialog
+        open={confirmSignOutAllOpen}
+        onOpenChange={setConfirmSignOutAllOpen}
+        title="Sair de todos os dispositivos?"
+        description="Você será desconectado de todas as sessões ativas e precisará fazer login novamente em cada computador ou celular."
+        confirmLabel="Sair de Todos os Dispositivos"
+        variant="destructive"
+        loading={isSigningOut}
+        onConfirm={executeSignOutAll}
+      />
+
+      <ConfirmDialog
+        open={confirmDisableMfaOpen}
+        onOpenChange={setConfirmDisableMfaOpen}
+        title="Desligar verificação em duas etapas?"
+        description="A proteção adicional por aplicativo autenticador será removida desta conta."
+        confirmLabel="Desligar Verificação"
+        variant="destructive"
+        loading={mexendo}
+        onConfirm={executeDisableMfa}
+      />
     </div>
   );
 }

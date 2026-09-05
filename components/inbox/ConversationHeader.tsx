@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { JanelaSelo } from "@/components/inbox/JanelaSelo";
-import { Phone, ArrowRight } from "@/lib/ui/icons";
+import { Phone, EnvelopeSimple, InstagramLogo, ArrowRight } from "@/lib/ui/icons";
 import { useAuth } from "@/hooks/auth/AuthProvider";
 import { useClaimConversation } from "@/hooks/inbox/useClaimConversation";
 import { useReleaseConversation } from "@/hooks/inbox/useReleaseConversation";
@@ -14,6 +14,7 @@ import { useCloseConversation } from "@/hooks/inbox/useCloseConversation";
 import { useResumeAiAttendance } from "@/hooks/inbox/useResumeAiAttendance";
 import { ReassignDialog } from "@/components/inbox/ReassignDialog";
 import { SnoozeButton } from "@/components/inbox/SnoozeButton";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import type { ConversationWithContact } from "@/hooks/inbox/useConversationsRealtime";
 import { rotuloDoContato } from "@/lib/contacts/rotulo-do-contato";
 
@@ -54,6 +55,7 @@ export function ConversationHeader({ conversation }: Props) {
   const close = useCloseConversation();
   const retomar = useResumeAiAttendance();
   const [reassignOpen, setReassignOpen] = useState(false);
+  const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
 
   const c = conversation.contacts ?? null;
   const displayName = rotuloDoContato(c);
@@ -127,6 +129,16 @@ export function ConversationHeader({ conversation }: Props) {
               <Phone size={11} weight="regular" aria-hidden /> {phone}
             </p>
           )}
+          {!phone && c?.email && (
+            <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
+              <EnvelopeSimple size={11} weight="regular" aria-hidden /> {c.email}
+            </p>
+          )}
+          {!phone && !c?.email && (c as { instagram_username?: string })?.instagram_username && (
+            <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
+              <InstagramLogo size={11} weight="regular" aria-hidden /> {(c as { instagram_username?: string }).instagram_username}
+            </p>
+          )}
         </div>
       </div>
 
@@ -188,11 +200,7 @@ export function ConversationHeader({ conversation }: Props) {
             size="sm"
             variant="outline"
             disabled={close.isPending}
-            onClick={() => {
-              if (confirm("Fechar esta conversa?")) {
-                close.mutate({ conversation_id: conversation.id });
-              }
-            }}
+            onClick={() => setCloseConfirmOpen(true)}
           >
             {t("Fechar")}
           </Button>
@@ -221,6 +229,18 @@ export function ConversationHeader({ conversation }: Props) {
         conversationId={conversation.id}
         open={reassignOpen}
         onOpenChange={setReassignOpen}
+      />
+      <ConfirmDialog
+        open={closeConfirmOpen}
+        onOpenChange={setCloseConfirmOpen}
+        title="Fechar conversa?"
+        description="A conversa será movida para a aba de conversas fechadas. Caso o cliente envie uma nova mensagem, ela será reaberta automaticamente."
+        confirmLabel="Fechar Conversa"
+        loading={close.isPending}
+        onConfirm={async () => {
+          await close.mutateAsync({ conversation_id: conversation.id });
+          setCloseConfirmOpen(false);
+        }}
       />
     </div>
   );

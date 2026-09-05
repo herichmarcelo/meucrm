@@ -27,6 +27,7 @@ import { useSendMessage } from "@/hooks/inbox/useSendMessage";
 import { useUploadMedia } from "@/hooks/inbox/useUploadMedia";
 import { imagemDoClipboard } from "@/lib/inbox/clipboard-image";
 import { interpolateTemplate } from "@/lib/inbox/template-vars";
+import { channelKindOf } from "@/lib/channels/types";
 import { cn } from "@/lib/utils";
 
 export interface ComposerHandle {
@@ -61,6 +62,10 @@ interface Props {
   contactName?: string | null;
   /** Contato da conversa — excluído do seletor de cartão compartilhado. */
   currentContactId?: string | null;
+  /** Canal da conversa ('whatsapp' | 'email') */
+  channel?: string | null;
+  /** Provider da sessão do canal */
+  channelProvider?: string | null;
 }
 
 export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
@@ -73,11 +78,14 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
     currentContactId,
     respondendo,
     onCancelarResposta,
+    channel,
+    channelProvider,
   },
   ref,
 ) {
   const t = useT();
   const [text, setText] = useState("");
+  const [subject, setSubject] = useState("");
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [contactPickerOpen, setContactPickerOpen] = useState(false);
   const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
@@ -90,6 +98,8 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   const templates = useMessageTemplates();
   const slash = resolveSlash(text);
   const menuOpen = mode === "reply" && slash.open && !menuDismissed;
+
+  const isEmail = channel === "email" || channelKindOf(channelProvider) === "email";
 
   useImperativeHandle(ref, () => ({
     focus: () => taRef.current?.focus(),
@@ -114,11 +124,15 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
     const body = text.trim();
     if (!body || (mode === "note" ? isDisabled : respostaBarrada)) return;
 
+    const emailSubject = isEmail ? subject.trim() : "";
+
     setText("");
+    if (isEmail) setSubject("");
     requestAnimationFrame(() => autoresize());
 
     const restoreOnError = () => {
       setText(body);
+      if (isEmail && emailSubject) setSubject(emailSubject);
       requestAnimationFrame(() => autoresize());
     };
 
@@ -131,11 +145,13 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
         conversation_id: conversationId,
         body,
         type: "text",
+        ...(emailSubject ? { metadata: { subject: emailSubject } } : {}),
         ...(respondendo ? { reply_to_message_id: respondendo.id } : {}),
       },
       {
         onSuccess: () => {
           setText("");
+          if (isEmail) setSubject("");
           // A citação vale para UMA mensagem. Mantê-la depois do envio faria a
           // próxima frase sair citando algo que o atendente já respondeu.
           onCancelarResposta?.();
@@ -282,6 +298,23 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
             </button>
           </div>
         )}
+        {mode === "reply" && isEmail && (
+          <div className="mb-2 flex items-center gap-2">
+            <input
+              type="text"
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              placeholder={
+                respondendo?.body
+                  ? `Re: ${respondendo.body.slice(0, 40).trim()}…`
+                  : t("Assunto do e-mail (opcional)")
+              }
+              className="h-7 flex-1 rounded-md border border-input bg-background px-2.5 text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+              aria-label="Assunto do e-mail"
+              disabled={respostaBarrada}
+            />
+          </div>
+        )}
         <div className="flex items-end gap-2">
           {mode === "reply" && (
             <AttachMenu
@@ -320,9 +353,14 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
                 send.mutate(
                   {
                     conversation_id: conversationId,
-                    type: "image",
+                    // GIF do Giphy é enviado como vídeo MP4 com gif_playback=true.
+                    // O WhatsApp exibe videoMessage com gifPlayback como GIF animado em loop nativo.
+                    // /send/sticker extrai só o primeiro frame (estático) — não usar para GIF.
+                    type: gif.is_mp4 ? "video" : "image",
                     media_url: gif.url,
-                    media_mime: "image/gif",
+                    media_mime: gif.is_mp4 ? "video/mp4" : "image/gif",
+                    // gif_playback propaga até o envelope para o adapter GOWA rotear corretamente
+                    ...(gif.is_mp4 ? { metadata: { gif_playback: true } } : {}),
                     reply_to_message_id: respondendo?.id,
                   },
                   {
@@ -362,7 +400,11 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
             // uma nota interna precisa saber que ela não vai para o cliente, e
             // essa informação não pode depender de abrir um diálogo.
             placeholder={
-              mode === "note" ? t("Escreva uma nota interna… (só o time vê)") : t("Escreva uma mensagem…")
+              mode === "note"
+                ? t("Escreva uma nota interna… (só o time vê)")
+                : isEmail
+                  ? t("Escreva uma resposta por e-mail…")
+                  : t("Escreva uma mensagem…")
             }
             title={
               mode === "note"
@@ -376,7 +418,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
             disabled={mode === "note" ? isDisabled : respostaBarrada}
             aria-label="Mensagem"
           />
-          {text.trim() || mode === "note" ? (
+          {text.trim() || mode === "note" || isEmail ? (
             <Button
               type="button"
               size="icon"

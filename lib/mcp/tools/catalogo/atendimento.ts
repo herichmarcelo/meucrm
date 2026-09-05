@@ -108,4 +108,44 @@ export const TOOLS_ATENDIMENTO = declararTools([
     risco: "critico",
     pacotes: ["atender"],
   },
+  {
+    name: "crm_list_services",
+    category: "read",
+    rotulo: "Listar serviços e atendimentos",
+    explicacao:
+      "Consulta os tipos de atendimento, procedimentos ou serviços cadastrados com duração e preço.",
+    oQueToca: "Agenda e Serviços",
+    risco: "seguro",
+    pacotes: ["vender"],
+  },
+  {
+    name: "crm_list_available_slots",
+    category: "read",
+    rotulo: "Ver horários livres para agendamento",
+    explicacao:
+      "Consulta horários disponíveis na agenda para sugerir datas e horas de consulta ao cliente.",
+    oQueToca: "Agenda e Serviços",
+    risco: "seguro",
+    pacotes: ["vender"],
+  },
+  {
+    name: "crm_book_appointment",
+    category: "write",
+    rotulo: "Marcar consulta ou atendimento",
+    explicacao:
+      "Reserva um horário na agenda para o cliente e atualiza a etapa de agendamento no funil de vendas.",
+    oQueToca: "Agenda e Funil",
+    risco: "atencao",
+    pacotes: ["vender"],
+  },
+  {
+    name: "crm_update_appointment_status",
+    category: "write",
+    rotulo: "Atualizar status da consulta",
+    explicacao:
+      "Confirma a consulta, registra comparecimento ou cancelamento na agenda.",
+    oQueToca: "Agenda e Funil",
+    risco: "atencao",
+    pacotes: ["vender"],
+  },
 ]);

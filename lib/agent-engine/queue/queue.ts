@@ -177,9 +177,9 @@ export async function faltaParaOProximoJob(pool: Pool): Promise<number | null> {
   const { rows } = await pool.query<{ falta_ms: number | null }>(
     `select case
               when min(run_after) is null then null
-              else least(
-                     greatest(extract(epoch from (min(run_after) - now())) * 1000, 0),
-                     86400000
+              else greatest(
+                     extract(epoch from (least(min(run_after), now() + interval '24 hours') - now())) * 1000,
+                     0
                    )::int
             end as falta_ms
        from job_queue

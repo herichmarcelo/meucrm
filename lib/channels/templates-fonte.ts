@@ -43,6 +43,8 @@ const FONTE: Record<ChannelProvider, FonteDeTemplates | null> = {
   meta_cloud: "oficial",
   zernio: "parceiro",
   gowa: null,
+  email: null,
+  instagram: null,
 };
 
 /** `null` quando este canal não trabalha com definições aprovadas. */

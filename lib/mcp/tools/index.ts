@@ -71,6 +71,12 @@ import {
   crmCloseDemand,
   crmProposeReactivation,
 } from "./retencao";
+import {
+  crmListServices,
+  crmListAvailableSlots,
+  crmBookAppointment,
+  crmUpdateAppointmentStatus,
+} from "./agendamento";
 
 // Cast via `unknown` porque McpToolDefinition<TInput> nao e covariante
 // em TInput (handler usa TInput em posicao contravariante). Coletar
@@ -97,6 +103,8 @@ export const allTools: ReadonlyArray<McpToolDefinition> = [
   crmListContactOrders,
   crmSearchProducts,
   crmListPrivacyRequests,
+  crmListServices,
+  crmListAvailableSlots,
   // read — organizar a operação (W4)
   crmListStages,
   crmListTags,
@@ -119,6 +127,8 @@ export const allTools: ReadonlyArray<McpToolDefinition> = [
   crmSendWhatsappMessage,
   crmAssignConversation,
   crmManageTags,
+  crmBookAppointment,
+  crmUpdateAppointmentStatus,
   // write — organizar a operação (W4)
   crmCreateStage,
   crmUpdateStage,

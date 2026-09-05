@@ -139,6 +139,12 @@ const schema = z.object({
   GOWA_API_BASE_URL: z.string().optional().default("http://localhost:4000"),
   GOWA_API_USER: z.string().optional().default("admin"),
   GOWA_API_PASS: z.string().optional().default(""),
+  // URL base que o CRM grava no GOWA ao registrar um device para receber webhooks.
+  // Deve ser alcançável de DENTRO do container GOWA — use host.docker.internal em
+  // Docker local (ex: http://host.docker.internal:3000) e a URL pública em produção.
+  // Diferente de NEXT_PUBLIC_APP_URL, que é a URL do navegador e resolve localhost
+  // para o próprio container, não para o host Next.js.
+  GOWA_WEBHOOK_BASE_URL: z.string().optional().default(""),
   GOWA_WEBHOOK_SECRET: z.string().optional().default(""),
   GOWA_WEBHOOK_REQUIRE_SIGNATURE: z.string().optional().default("false"),
 

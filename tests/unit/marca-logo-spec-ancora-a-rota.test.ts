@@ -43,8 +43,8 @@ const RAIZ = process.cwd();
 const CAMINHO_SPEC = path.join(RAIZ, "tests/e2e/marca-logo.spec.ts");
 const CAMINHO_CONFIG = path.join(RAIZ, "playwright.config.ts");
 
-const SPEC = readFileSync(CAMINHO_SPEC, "utf8");
-const CONFIG = readFileSync(CAMINHO_CONFIG, "utf8");
+const SPEC = readFileSync(CAMINHO_SPEC, "utf8").replace(/\r\n/g, "\n");
+const CONFIG = readFileSync(CAMINHO_CONFIG, "utf8").replace(/\r\n/g, "\n");
 
 /** O corpo de uma função de topo de arquivo, do `{` ao `\n}` da coluna zero. */
 function corpoDaFuncao(fonte: string, assinatura: string): string {

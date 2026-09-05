@@ -57,6 +57,10 @@ const NAO_PEDE_PARA_SAIR = [
   "posso cancelar a consulta de amanhã?",
   "vocês vão parar no feriado?",
   "que horas vocês param de atender?",
+  // objeto de entrega/endereço/pedido — não é descadastro de comunicação
+  "pare de mandar o pedido nesse endereço",
+  "pare de enviar a entrega para este local",
+  "não quero receber o pedido aqui",
   // colagem — o defeito da versão com `\b` ASCII, que já tinha sido corrigido
   "amanhã ele sairá do escritório e pararão as obras",
   "a obra pararia se chovesse",
@@ -85,12 +89,18 @@ const ESPANHOL_PEDE_PARA_SAIR = [
   "BAJA",
   "Baja",
   "baja.",
+  "dame de baja",
+  "dame de baja de la lista",
   "darme de baja",
   "dar de baja la suscripcion",
   "quiero dar de baja la suscripcion",
   "no quiero recibir mas mensajes",
   "no quiero recibir más mensajes",
+  "no quiero mas mensajes",
+  "deja de escribirme",
+  "dejen de mandar mensajes",
   "por favor no me escriban mas",
+  "no me mandes mas mensajes",
   "me desuscribo",
   "sacame de la lista",
   "cancelar la suscripcion",
@@ -106,6 +116,7 @@ const ESPANHOL_NAO_PEDE = [
   "puedo cancelar el turno del martes?",
   // Troca de canal, não descadastro — o mesmo raciocínio da regra de "ligação".
   "no quiero recibir la factura por aqui, manda por email",
+  "deja de mandar el pedido a esta direccion",
   // Outra lista. Quem escreve isto QUER continuar sendo atendido.
   "sacame de la lista de espera",
 ];
@@ -159,7 +170,15 @@ describe("ehOptOutProvavel — soma o ambíguo, para parar de responder e escala
     }
   });
 
-  it.each(["me deixa em paz", "já disse que não quero", "para com isso"])(
+  it.each([
+    "me deixa em paz",
+    "já disse que não quero",
+    "para com isso",
+    "dejame en paz",
+    "no me interesa mas",
+    "basta ya",
+    "ya dije que no",
+  ])(
     "reconhece o sinal ambíguo: %s",
     (texto) => {
       expect(ehOptOutProvavel(texto)).toBe(true);

@@ -25,6 +25,8 @@ import { melhorFrenteSobre } from "@/lib/branding/contraste";
 import { stop } from "@/lib/branding/rampa";
 import { REGUA_DO_PRODUTO } from "@/lib/branding/regua-do-produto";
 
+import { env } from "@/lib/env";
+
 /** O que a leitura de `organizations` vai devolver no caso corrente. */
 let respostaDaOrganizacao: { data: unknown; error: unknown } = { data: null, error: null };
 /** Quando ligado, `createAdminClient()` explode — a simulação do banco fora. */
@@ -199,7 +201,7 @@ describe("marcaDaSaida — NUNCA LANÇA", () => {
     for (const settings of ["texto", 42, [], { branding: "isto era um objeto" }, null]) {
       respostaDaOrganizacao = { data: { settings }, error: null };
       const marca = await marcaDaSaida("11111111-1111-4111-8111-111111111111");
-      expect(marca.nome).toBe("DeskcommCRM");
+      expect(marca.nome).toBe(env.APP_NAME?.trim() || "DeskcommCRM");
     }
   });
 

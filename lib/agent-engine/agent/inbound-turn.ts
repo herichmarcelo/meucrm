@@ -759,6 +759,23 @@ export function parseCheckpointText(text: string): CheckpointContent {
   return parsed.data;
 }
 
+export function formatCurrentDateTime(now: Date = new Date(), timeZone = 'America/Sao_Paulo'): string {
+  try {
+    const formatter = new Intl.DateTimeFormat('pt-BR', {
+      timeZone,
+      weekday: 'long',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+    return formatter.format(now);
+  } catch {
+    return now.toISOString();
+  }
+}
+
 /**
  * Blocos do ritual de abertura (pt-br: é a língua do agente), compartilhados entre
  * o turno inbound e o follow-up (F3-03) — checkpoint + resumo + estado do funil +
@@ -776,6 +793,7 @@ export function ritualBlocks(
    * consegue usar um id para alguma coisa?".
    */
   projeta = false,
+  now: Date = new Date(),
 ): string[] {
   const checkpointBlock = previous
     ? JSON.stringify({
@@ -795,6 +813,9 @@ export function ritualBlocks(
       })
     : 'sem registro — o lead está em "new"';
   return [
+    '## Momento atual (data, hora e dia da semana)',
+    `Hoje é ${formatCurrentDateTime(now)}. Use esta informação para calcular prazos, dias de atendimento e consultas.`,
+    '',
     '## Checkpoint anterior (compromissos, objeções, próxima ação)',
     checkpointBlock,
     '',
