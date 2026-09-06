@@ -77,6 +77,11 @@ export function useUser(): AuthUser {
   return useAuth().user;
 }
 
+export function useCurrentUser(): AuthUser | null {
+  const ctx = useContext(Ctx);
+  return ctx?.user ?? null;
+}
+
 export function useActiveOrg(): ActiveOrg | null {
   return useAuth().activeOrg;
 }

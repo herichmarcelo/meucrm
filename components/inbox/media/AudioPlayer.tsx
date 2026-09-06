@@ -1,11 +1,10 @@
 "use client";
+/* eslint-disable @next/next/no-img-element */
 import { useEffect, useRef, useState } from "react";
-import Image from "next/image";
-
 import { Robot } from "@/lib/ui/icons";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { useUser } from "@/hooks/auth/AuthProvider";
+import { useCurrentUser } from "@/hooks/auth/AuthProvider";
 import type { Message } from "@/lib/types/messaging";
 
 import { MediaUnavailable } from "./MediaUnavailable";
@@ -34,7 +33,7 @@ interface Props {
 /** Player de voz estilo WhatsApp: play/pause nativo, avatar do remetente com microfone, alternância dinâmica para velocidade e reprodução sequencial. */
 export function AudioPlayer({ messageId, isOutbound, message }: Props) {
   const audioRef = useRef<HTMLAudioElement>(null);
-  const user = useUser();
+  const user = useCurrentUser();
   const [playing, setPlaying] = useState(false);
   const [loading, setLoading] = useState(false);
   const [duration, setDuration] = useState(0);
@@ -50,8 +49,10 @@ export function AudioPlayer({ messageId, isOutbound, message }: Props) {
     return registerAudioPlayer(messageId, {
       play: () => {
         if (audioRef.current) {
-          void audioRef.current.play();
-          setPlaying(true);
+          audioRef.current
+            .play()
+            .then(() => setPlaying(true))
+            .catch(() => setPlaying(false));
         }
       },
       pause: () => {
@@ -113,8 +114,9 @@ export function AudioPlayer({ messageId, isOutbound, message }: Props) {
       setPlaying(false);
     } else {
       notifyAudioStarted(messageId);
-      void el.play();
-      setPlaying(true);
+      el.play()
+        .then(() => setPlaying(true))
+        .catch(() => setPlaying(false));
     }
   };
 
@@ -140,17 +142,19 @@ export function AudioPlayer({ messageId, isOutbound, message }: Props) {
         onClick={toggle}
         className={cn(
           "flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-transform active:scale-95",
-          isOutbound
-            ? "hover:opacity-90"
-            : "hover:opacity-90",
+          isOutbound ? "hover:opacity-90" : "hover:opacity-90",
         )}
       >
         {loading ? (
-          <Image src="/loading.svg" alt="Carregando" width={24} height={24} className="animate-spin opacity-80" />
+          <img
+            src="/loading.svg"
+            alt="Carregando"
+            className="h-6 w-6 animate-spin opacity-80"
+          />
         ) : playing ? (
-          <Image src="/pause.svg" alt="Pausar" width={22} height={24} />
+          <img src="/pause.svg" alt="Pausar" className="h-6 w-6" />
         ) : (
-          <Image src="/play.svg" alt="Play" width={22} height={24} className="ml-0.5" />
+          <img src="/play.svg" alt="Play" className="h-6 w-6 ml-0.5" />
         )}
       </button>
 
@@ -222,13 +226,11 @@ export function AudioPlayer({ messageId, isOutbound, message }: Props) {
             )}
 
             {/* Ícone de Microfone sobreposto */}
-            <Image
+            <img
               src="/microfone.svg"
               alt=""
-              width={14}
-              height={18}
               aria-hidden
-              className="absolute -bottom-1 -left-1 drop-shadow pointer-events-none select-none"
+              className="absolute -bottom-1 -left-1 h-4 w-4 drop-shadow pointer-events-none select-none"
             />
           </div>
         )}
