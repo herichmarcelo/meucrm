@@ -167,14 +167,26 @@ async function request<T>(
           e.message,
         );
       }
+
+      const isHtml =
+        typeof errBody === "string" &&
+        (errBody.trim().startsWith("<") ||
+          errBody.includes("<!DOCTYPE") ||
+          errBody.includes("<html"));
+      const sanitizedMessage = isHtml
+        ? res.status === 404
+          ? "Recurso não encontrado (HTTP 404)"
+          : `Erro no servidor (HTTP ${res.status})`
+        : typeof errBody === "string" && errBody.length > 0
+          ? errBody
+          : `HTTP ${res.status}`;
+
       throw new ApiError(
         res.status,
         synthesizeCode(res.status),
         undefined,
         responseRequestId,
-        typeof errBody === "string" && errBody.length > 0
-          ? errBody
-          : `HTTP ${res.status}`,
+        sanitizedMessage,
       );
     } catch (err) {
       // ApiError thrown above for non-retryable: propagate immediately

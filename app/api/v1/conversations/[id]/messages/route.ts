@@ -63,9 +63,15 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<Response> {
     );
     return ok(messages, { requestId, meta: { cursor, has_more } });
   } catch (err) {
+    console.error("[messages.get] failed:", err);
     if (err instanceof ApiError) {
       return fail(err.code, err.message, err.status, { requestId });
     }
-    throw err;
+    return fail(
+      "internal_error",
+      err instanceof Error ? err.message : "Erro ao listar mensagens.",
+      500,
+      { requestId },
+    );
   }
 }

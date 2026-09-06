@@ -30,6 +30,10 @@ const COPY: Record<string, { variant: Variant; msg: string }> = {
     variant: "error",
     msg: "Recurso não encontrado ou já removido.",
   },
+  not_found: {
+    variant: "error",
+    msg: "Recurso não encontrado ou indisponível.",
+  },
   tenant_not_found: {
     variant: "error",
     msg: "Organização não encontrada.",
