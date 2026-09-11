@@ -108,6 +108,56 @@ describe("MCP Tools de Agendamento (v1.11.0)", () => {
         expect(res.horarios_livres[0]?.scheduled_at_iso).toBeDefined();
       }
     });
+
+    it("respeita o fuso horário configurado na organização (ex: America/Manaus)", async () => {
+      const mockSupabase = {
+        from: vi.fn((table: string) => {
+          if (table === "organizations") {
+            return {
+              select: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  maybeSingle: vi.fn().mockResolvedValue({
+                    data: { timezone: "America/Manaus" },
+                  }),
+                }),
+              }),
+            };
+          }
+          if (table === "appointments") {
+            return {
+              select: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  in: vi.fn().mockReturnValue({
+                    gte: vi.fn().mockReturnValue({
+                      lte: vi.fn().mockResolvedValue({ data: [], error: null }),
+                    }),
+                  }),
+                }),
+              }),
+            };
+          }
+          return {};
+        }),
+      };
+
+      const ctx = createMockContext(mockSupabase);
+      const res = (await crmListAvailableSlots.handler(
+        { dias_a_frente: 7, limite_opcoes: 1, service_type_id: undefined },
+        ctx,
+      )) as {
+        horarios_livres: Array<{ texto_legivel: string; scheduled_at_iso: string }>;
+      };
+
+      expect(res.horarios_livres.length).toBe(1);
+      const slot = res.horarios_livres[0]!;
+      const matchHora = slot.texto_legivel.match(/às (\d{2}):00/);
+      expect(matchHora).toBeTruthy();
+      const horaLocal = Number.parseInt(matchHora![1]!, 10);
+      const dateUtc = new Date(slot.scheduled_at_iso);
+      // Diferença entre UTC e Manaus (UTC-4) é de exatamente 4 horas
+      const diffHoras = (dateUtc.getUTCHours() - horaLocal + 24) % 24;
+      expect(diffHoras).toBe(4);
+    });
   });
 
   describe("crm_book_appointment", () => {

@@ -11,6 +11,7 @@
 import { z } from "zod";
 import type { McpToolDefinition } from "../types";
 import { syncAppointmentStage } from "@/lib/appointments/pipeline-sync";
+import { getZonedDateParts, zonedTimeToUtc } from "@/lib/business-hours/calc-business-time";
 
 // ---------------------------------------------------------------------------
 // 1. Listar serviços / tipos de atendimento
@@ -95,6 +96,22 @@ export const crmListAvailableSlots: McpToolDefinition<typeof listSlotsInputShape
       }
     }
 
+    // 1b. Obtém fuso horário configurado na organização (fallback seguro: America/Sao_Paulo)
+    let timeZone = "America/Sao_Paulo";
+    try {
+      const { data: orgData } = await ctx.supabase
+        .from("organizations")
+        .select("timezone")
+        .eq("id", ctx.organizationId)
+        .maybeSingle();
+
+      if (orgData?.timezone) {
+        timeZone = orgData.timezone;
+      }
+    } catch {
+      // Fallback seguro caso mock ou tabela não responda
+    }
+
     // 2. Busca agendamentos ocupados no período
     const agora = new Date();
     const fimPeriodo = new Date(agora.getTime() + input.dias_a_frente * 24 * 60 * 60 * 1000);
@@ -115,28 +132,25 @@ export const crmListAvailableSlots: McpToolDefinition<typeof listSlotsInputShape
       };
     });
 
-    // 3. Gera candidatos de horários (Segunda a Sexta, 08:30 às 17:30, intervalos de 1h ou duração)
+    // 3. Gera candidatos de horários no fuso da organização
     const slotsDisponiveis: Array<{
       texto_legivel: string;
       scheduled_at_iso: string;
       dia_da_semana: string;
     }> = [];
 
-    const diaCursor = new Date(agora);
-    // Se já passou das 17h hoje, começa a partir de amanhã
-    if (diaCursor.getHours() >= 17) {
-      diaCursor.setDate(diaCursor.getDate() + 1);
-    }
+    const agoraParts = getZonedDateParts(agora, timeZone);
+    const offsetInicio = agoraParts.hour >= 17 ? 1 : 0;
 
     const formatterDia = new Intl.DateTimeFormat("pt-BR", {
-      timeZone: "America/Sao_Paulo",
+      timeZone,
       weekday: "long",
       day: "2-digit",
       month: "2-digit",
     });
 
     const formatterHora = new Intl.DateTimeFormat("pt-BR", {
-      timeZone: "America/Sao_Paulo",
+      timeZone,
       hour: "2-digit",
       minute: "2-digit",
     });
@@ -144,18 +158,18 @@ export const crmListAvailableSlots: McpToolDefinition<typeof listSlotsInputShape
     const horasComerciais = [9, 10, 11, 14, 15, 16];
 
     for (let d = 0; d < input.dias_a_frente && slotsDisponiveis.length < input.limite_opcoes; d++) {
-      const diaAtual = new Date(diaCursor.getTime() + d * 24 * 60 * 60 * 1000);
-      const diaSemana = diaAtual.getDay();
-      // Pula domingo (0) e sábado à tarde se aplicável
+      const diaAlvo = new Date(Date.UTC(agoraParts.year, agoraParts.month - 1, agoraParts.day + offsetInicio + d, 12, 0, 0));
+      const diaParts = getZonedDateParts(diaAlvo, timeZone);
+      const diaSemana = diaParts.dayOfWeek;
+      // Pula domingo (0) e sábado (6)
       if (diaSemana === 0 || diaSemana === 6) continue;
 
       for (const hora of horasComerciais) {
         if (slotsDisponiveis.length >= input.limite_opcoes) break;
 
-        const slotInicio = new Date(diaAtual);
-        slotInicio.setHours(hora, 0, 0, 0);
+        const slotInicio = zonedTimeToUtc(diaParts.year, diaParts.month, diaParts.day, hora, 0, 0, timeZone);
 
-        // Se o horário já passou hoje, pula
+        // Se o horário já passou hoje (com margem de 1h), pula
         if (slotInicio.getTime() <= agora.getTime() + 60 * 60 * 1000) {
           continue;
         }
