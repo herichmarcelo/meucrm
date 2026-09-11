@@ -14,6 +14,8 @@ describe("precoParaCentavos (parser de preço em planilha suja)", () => {
     expect(precoParaCentavos("1.234.567,89")).toBe(123456789);
     expect(precoParaCentavos("0,50")).toBe(50);
     expect(precoParaCentavos("0.99")).toBe(99);
+    expect(precoParaCentavos("1299,9")).toBe(129990);
+    expect(precoParaCentavos("1299.9")).toBe(129990);
   });
 
   it("rejeita observações coladas a números para evitar concatenação indevida", () => {

@@ -34,7 +34,7 @@ export function precoParaCentavos(entrada: string): number | null {
   let decimais = "";
   if (corte !== -1) {
     const depois = limpo.slice(corte + 1);
-    if (depois.length === 2 && /^\d{2}$/.test(depois)) {
+    if ((depois.length === 1 || depois.length === 2) && /^\d{1,2}$/.test(depois)) {
       inteiros = limpo.slice(0, corte);
       decimais = depois;
     }
