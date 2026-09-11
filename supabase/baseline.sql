@@ -14251,6 +14251,279 @@ create index if not exists idx_contacts_org_instagram_id
 
 notify pgrst, 'reload schema';
 
+-- 0175: Tabela tags (definição de tags com cor por organização).
+create table if not exists public.tags (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  name text not null,
+  color text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint tags_org_name_unique unique (organization_id, name)
+);
+
+create index if not exists idx_tags_org on public.tags (organization_id);
+
+alter table public.tags enable row level security;
+
+drop policy if exists "tags_select" on public.tags;
+create policy "tags_select" on public.tags
+  for select using (
+    organization_id in (select fn_user_org_ids())
+    or fn_is_platform_admin()
+  );
+
+drop policy if exists "tags_write" on public.tags;
+create policy "tags_write" on public.tags
+  for all using (
+    (organization_id in (select fn_user_org_ids()) and fn_role_at_least(organization_id, 'agent'))
+    or fn_is_platform_admin()
+  )
+  with check (
+    (organization_id in (select fn_user_org_ids()) and fn_role_at_least(organization_id, 'agent'))
+    or fn_is_platform_admin()
+  );
+
+insert into public.tags (organization_id, name, color)
+select o.id, lower(trim(elem.val)), null
+from public.organizations o,
+     lateral jsonb_array_elements_text(o.settings->'canonical_conversation_tags') as elem(val)
+where jsonb_typeof(o.settings->'canonical_conversation_tags') = 'array'
+on conflict (organization_id, name) do nothing;
+
+-- 0176: Tabela business_hours_slots e business_holidays (expediente comercial da organização).
+create table if not exists public.business_hours_slots (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  day_of_week integer not null check (day_of_week between 0 and 6),
+  open_time time not null default '08:00:00',
+  close_time time not null default '18:00:00',
+  is_active boolean not null default true,
+  timezone text not null default 'America/Sao_Paulo',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint business_hours_org_day_unique unique (organization_id, day_of_week),
+  constraint business_hours_time_order check (close_time > open_time)
+);
+
+create index if not exists idx_business_hours_org on public.business_hours_slots (organization_id);
+
+alter table public.business_hours_slots enable row level security;
+
+drop policy if exists "business_hours_slots_select" on public.business_hours_slots;
+create policy "business_hours_slots_select" on public.business_hours_slots
+  for select using (
+    organization_id in (select fn_user_org_ids())
+    or fn_is_platform_admin()
+  );
+
+drop policy if exists "business_hours_slots_write" on public.business_hours_slots;
+create policy "business_hours_slots_write" on public.business_hours_slots
+  for all using (
+    (organization_id in (select fn_user_org_ids()) and fn_role_at_least(organization_id, 'manager'))
+    or fn_is_platform_admin()
+  )
+  with check (
+    (organization_id in (select fn_user_org_ids()) and fn_role_at_least(organization_id, 'manager'))
+    or fn_is_platform_admin()
+  );
+
+create table if not exists public.business_holidays (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  holiday_date date not null,
+  description text,
+  created_at timestamptz not null default now(),
+  constraint business_holidays_org_date_unique unique (organization_id, holiday_date)
+);
+
+create index if not exists idx_business_holidays_org on public.business_holidays (organization_id);
+
+alter table public.business_holidays enable row level security;
+
+drop policy if exists "business_holidays_select" on public.business_holidays;
+create policy "business_holidays_select" on public.business_holidays
+  for select using (
+    organization_id in (select fn_user_org_ids())
+    or fn_is_platform_admin()
+  );
+
+drop policy if exists "business_holidays_write" on public.business_holidays;
+create policy "business_holidays_write" on public.business_holidays
+  for all using (
+    (organization_id in (select fn_user_org_ids()) and fn_role_at_least(organization_id, 'manager'))
+    or fn_is_platform_admin()
+  )
+  with check (
+    (organization_id in (select fn_user_org_ids()) and fn_role_at_least(organization_id, 'manager'))
+    or fn_is_platform_admin()
+  );
+
+insert into public.business_hours_slots (organization_id, day_of_week, open_time, close_time, is_active, timezone)
+select 
+  o.id,
+  d.day,
+  '08:00:00'::time,
+  '18:00:00'::time,
+  case when d.day between 1 and 5 then true else false end,
+  coalesce(nullif(trim(o.settings->>'timezone'), ''), 'America/Sao_Paulo')
+from public.organizations o
+cross join (values (0), (1), (2), (3), (4), (5), (6)) as d(day)
+on conflict (organization_id, day_of_week) do nothing;
+
+-- 0177: Extensão de tags para suporte a grupos exclusivos ("tipo de atendimento"), SLA e CSAT.
+alter table public.tags
+  add column if not exists group_slug text default null,
+  add column if not exists is_exclusive boolean not null default false,
+  add column if not exists is_csat_enabled boolean not null default false,
+  add column if not exists sla_first_response_minutes integer default null,
+  add column if not exists sla_resolution_minutes integer default null;
+
+create index if not exists idx_tags_group on public.tags (organization_id, group_slug);
+
+insert into public.tags (
+  organization_id,
+  name,
+  color,
+  group_slug,
+  is_exclusive,
+  is_csat_enabled,
+  sla_first_response_minutes,
+  sla_resolution_minutes
+)
+select 
+  o.id,
+  t.name,
+  t.color,
+  'tipo_atendimento',
+  true,
+  t.csat,
+  t.sla_fr,
+  t.sla_res
+from public.organizations o
+cross join (
+  values 
+    ('suporte', 'azul', true, 60, 1440),
+    ('vendas', 'verde', false, 15, 2880),
+    ('financeiro', 'amarelo', true, 120, 1440),
+    ('duvidas', 'roxo', false, 30, 720)
+) as t(name, color, csat, sla_fr, sla_res)
+on conflict (organization_id, name) do update set
+  group_slug = excluded.group_slug,
+  is_exclusive = excluded.is_exclusive,
+  is_csat_enabled = excluded.is_csat_enabled,
+  sla_first_response_minutes = excluded.sla_first_response_minutes,
+  sla_resolution_minutes = excluded.sla_resolution_minutes;
+
+-- 0178: Rastreio de SLA em demandas e suporte a pausa de relógio.
+alter table public.demandas
+  add column if not exists primeira_resposta_em timestamptz default null,
+  add column if not exists sla_paused_at timestamptz default null,
+  add column if not exists sla_total_paused_seconds integer not null default 0,
+  add column if not exists sla_first_response_target_minutes integer default null,
+  add column if not exists sla_resolution_target_minutes integer default null,
+  add column if not exists sla_first_response_breached boolean not null default false,
+  add column if not exists sla_resolution_breached boolean not null default false,
+  add column if not exists sla_breached_at timestamptz default null;
+
+create index if not exists idx_demandas_sla_paused
+  on public.demandas (organization_id, sla_paused_at)
+  where sla_paused_at is not null;
+
+create index if not exists idx_demandas_sla_primeira_resposta
+  on public.demandas (organization_id, primeira_resposta_em)
+  where primeira_resposta_em is null;
+
+-- 0179: Tabelas csat_surveys e csat_config para pesquisa de satisfação segmentada (WhatsApp e E-mail).
+create table if not exists public.csat_surveys (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  demanda_id uuid references public.demandas(id) on delete cascade,
+  conversation_id uuid references public.conversations(id) on delete set null,
+  contact_id uuid not null references public.contacts(id) on delete cascade,
+  channel text not null check (channel in ('whatsapp', 'email')),
+  score integer check (score between 1 and 5),
+  comment text,
+  token text unique not null,
+  status text not null default 'pending' check (status in ('pending', 'completed', 'expired')),
+  sent_at timestamptz not null default now(),
+  responded_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists idx_csat_surveys_org on public.csat_surveys (organization_id);
+create index if not exists idx_csat_surveys_token on public.csat_surveys (token);
+create index if not exists idx_csat_surveys_demanda on public.csat_surveys (demanda_id);
+create index if not exists idx_csat_surveys_conversation on public.csat_surveys (conversation_id);
+
+alter table public.csat_surveys enable row level security;
+
+drop policy if exists "csat_surveys_select" on public.csat_surveys;
+create policy "csat_surveys_select" on public.csat_surveys
+  for select using (
+    organization_id in (select fn_user_org_ids())
+    or fn_is_platform_admin()
+  );
+
+drop policy if exists "csat_surveys_write" on public.csat_surveys;
+create policy "csat_surveys_write" on public.csat_surveys
+  for all using (
+    (organization_id in (select fn_user_org_ids()) and fn_role_at_least(organization_id, 'manager'))
+    or fn_is_platform_admin()
+  )
+  with check (
+    (organization_id in (select fn_user_org_ids()) and fn_role_at_least(organization_id, 'manager'))
+    or fn_is_platform_admin()
+  );
+
+-- Tabela csat_config: tempo de espera e limite de frequência por contato
+create table if not exists public.csat_config (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  tag_id uuid references public.tags(id) on delete cascade,
+  delay_minutes integer not null default 0,
+  max_frequency_days integer not null default 30,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists idx_csat_config_org on public.csat_config (organization_id);
+
+create unique index if not exists idx_csat_config_org_default
+  on public.csat_config (organization_id)
+  where tag_id is null;
+
+create unique index if not exists idx_csat_config_org_tag
+  on public.csat_config (organization_id, tag_id)
+  where tag_id is not null;
+
+alter table public.csat_config enable row level security;
+
+drop policy if exists "csat_config_select" on public.csat_config;
+create policy "csat_config_select" on public.csat_config
+  for select using (
+    organization_id in (select fn_user_org_ids())
+    or fn_is_platform_admin()
+  );
+
+drop policy if exists "csat_config_write" on public.csat_config;
+create policy "csat_config_write" on public.csat_config
+  for all using (
+    (organization_id in (select fn_user_org_ids()) and fn_role_at_least(organization_id, 'manager'))
+    or fn_is_platform_admin()
+  )
+  with check (
+    (organization_id in (select fn_user_org_ids()) and fn_role_at_least(organization_id, 'manager'))
+    or fn_is_platform_admin()
+  );
+
+-- Popula com configuração padrão de CSAT para organizações existentes
+insert into public.csat_config (organization_id, tag_id, delay_minutes, max_frequency_days)
+select id, null, 0, 30
+from public.organizations
+on conflict do nothing;
+
 
 
 
