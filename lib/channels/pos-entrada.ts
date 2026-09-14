@@ -42,6 +42,7 @@ import { audit } from "@/lib/audit";
 import { syncContactAvatar } from "@/lib/contacts/avatar-sync";
 import { garantirLeadDaConversa } from "@/lib/leads/nascimento-do-lead";
 import { logger } from "@/lib/logger";
+import { processarRespostaCsat } from "@/lib/csat/csat-responder";
 import type { createAdminClient } from "@/lib/supabase/admin";
 import { ehPedidoDeOptOut } from "@/lib/opt-out/deteccao";
 
@@ -114,6 +115,28 @@ export async function aplicarEfeitosPosEntrada(
   entrada: EntradaDeMensagem,
 ): Promise<void> {
   await aplicarOptOut(admin, entrada);
+
+  try {
+    const csatResult = await processarRespostaCsat(
+      {
+        organizationId: entrada.organizationId,
+        conversationId: entrada.conversationId,
+        contactId: entrada.contactId,
+        text: entrada.texto ?? "",
+      },
+      admin,
+    );
+    if (csatResult.handled) {
+      sincronizarFotoDePerfil(admin, entrada);
+      return;
+    }
+  } catch (err) {
+    logger.warn("pos-entrada: processarRespostaCsat falhou", {
+      organization_id: entrada.organizationId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+
   await abrirDemanda(admin, entrada);
   await pedirDespachoDoAgente(admin, entrada);
   sincronizarFotoDePerfil(admin, entrada);

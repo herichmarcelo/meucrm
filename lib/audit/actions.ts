@@ -83,6 +83,11 @@ export const AUDIT_ACTIONS = [
   "conversation.closed",
   "conversation.tags_changed",
   "contact.tags_changed",
+  "tag.upserted",
+  "business_hours.updated",
+  "csat_config.updated",
+  "csat.survey_dispatched",
+  "csat.survey_responded",
   // Fila de confirmação (spec 17 §4b): a IA PROPÕE, uma pessoa decide. As três
   // entram porque a proposta é intenção auditável mesmo quando nunca vira
   // escrita — e "ninguém confirmou" é informação, não ausência dela.
@@ -194,6 +199,7 @@ export const AUDIT_ACTIONS = [
   // uma demanda, e qual. Sem isto, a única mutação que fecha o vazamento seria
   // a única sem rastro.
   "demanda.proximo_passo_definido",
+  "demanda.estado_alterado",
   "routing.worker_run",
   "attendant.heartbeat_swept",
   "webhook.source_created",
@@ -353,6 +359,10 @@ export const AUDIT_ACTIONS = [
   "appointment.updated",
   "appointment.status_changed",
   "appointment.cancelled",
+
+  // Pesquisa de Satisfação (CSAT)
+  "csat.survey_dispatched",
+  "csat.survey_responded",
 
   // Recuperação do primeiro acesso (onboarding)
   "tenant.created_by_recovery",
