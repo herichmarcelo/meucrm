@@ -8,6 +8,9 @@
  * mínima) sai do radar: nada a fazer ainda.
  */
 
+import { calcularMinutosUteis, calcularSegundosUteis } from "@/lib/business-hours/calc-business-time";
+import type { BusinessHoliday, BusinessHourSlot } from "@/lib/business-hours/types";
+
 export type RiskBucket = "critico" | "em_risco" | "em_voo" | "em_dia";
 
 // ponytail: janelas fixas; viram knob por pipeline (settings.fields) se um tenant pedir.
@@ -99,4 +102,89 @@ export function compareRisk(
 ): number {
   const byBucket = BUCKET_RANK[a.bucket] - BUCKET_RANK[b.bucket];
   return byBucket !== 0 ? byBucket : b.hoursSinceActivity - a.hoursSinceActivity;
+}
+
+// ---------------------------------------------------------------------------
+// SLA Risk Classification
+// ---------------------------------------------------------------------------
+
+export type SlaRiskBucket = "em_dia" | "em_risco" | "violado" | "pausado";
+
+export interface SlaRiskInput {
+  abertaEm: Date;
+  now: Date;
+  prazoMinutos: number | null;
+  isPaused: boolean;
+  totalPausedSeconds: number;
+  pausedAt?: Date | null;
+  slots: BusinessHourSlot[];
+  holidays: (string | BusinessHoliday)[];
+  timeZone?: string;
+}
+
+export interface SlaRiskResult {
+  bucket: SlaRiskBucket;
+  minutosUteisDecorridos: number;
+  minutosUteisRestantes: number | null;
+  porcentagemConsumida: number | null;
+}
+
+export function classifySlaRisk({
+  abertaEm,
+  now,
+  prazoMinutos,
+  isPaused,
+  totalPausedSeconds,
+  pausedAt,
+  slots,
+  holidays,
+  timeZone = "America/Sao_Paulo",
+}: SlaRiskInput): SlaRiskResult {
+  if (!prazoMinutos || prazoMinutos <= 0) {
+    return {
+      bucket: "em_dia",
+      minutosUteisDecorridos: 0,
+      minutosUteisRestantes: null,
+      porcentagemConsumida: null,
+    };
+  }
+
+  // Minutos brutos úteis desde a abertura
+  const minutosBrutos = calcularMinutosUteis(abertaEm, now, slots, holidays, timeZone);
+
+  // Segundos pausados acumulados
+  let segundosPausados = totalPausedSeconds || 0;
+  if (isPaused && pausedAt) {
+    segundosPausados += calcularSegundosUteis(pausedAt, now, slots, holidays, timeZone);
+  }
+
+  const minutosPausados = Math.floor(segundosPausados / 60);
+  const minutosEfetivos = Math.max(0, minutosBrutos - minutosPausados);
+  const minutosRestantes = Math.max(0, prazoMinutos - minutosEfetivos);
+  const porcentagemConsumida = Math.min(100, Math.round((minutosEfetivos / prazoMinutos) * 100));
+
+  if (isPaused) {
+    return {
+      bucket: "pausado",
+      minutosUteisDecorridos: minutosEfetivos,
+      minutosUteisRestantes: minutosRestantes,
+      porcentagemConsumida,
+    };
+  }
+
+  let bucket: SlaRiskBucket;
+  if (minutosEfetivos >= prazoMinutos) {
+    bucket = "violado";
+  } else if (minutosEfetivos >= prazoMinutos * 0.75) {
+    bucket = "em_risco";
+  } else {
+    bucket = "em_dia";
+  }
+
+  return {
+    bucket,
+    minutosUteisDecorridos: minutosEfetivos,
+    minutosUteisRestantes: minutosRestantes,
+    porcentagemConsumida,
+  };
 }

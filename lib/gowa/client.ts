@@ -274,6 +274,65 @@ export class GowaClient {
   }
 
   /**
+   * Envia mensagem com lista de opções interativa (ou fallback para texto formatado caso não suportado).
+   */
+  async sendList(
+    deviceId: string,
+    phone: string,
+    list: {
+      title?: string;
+      description: string;
+      buttonText: string;
+      footer?: string;
+      sections: Array<{
+        title: string;
+        rows: Array<{
+          rowId: string;
+          title: string;
+          description?: string;
+        }>;
+      }>;
+    },
+  ): Promise<GowaSendResult> {
+    try {
+      const body = {
+        phone,
+        title: list.title,
+        description: list.description,
+        button_text: list.buttonText,
+        footer: list.footer,
+        sections: list.sections.map((s) => ({
+          title: s.title,
+          rows: s.rows.map((r) => ({
+            row_id: r.rowId,
+            title: r.title,
+            description: r.description,
+          })),
+        })),
+      };
+
+      const res = await fetch(`${this.baseUrl}/send/list`, {
+        method: "POST",
+        headers: this.defaultHeaders(deviceId),
+        body: JSON.stringify(body),
+      });
+
+      if (res.ok) {
+        const json = await res.json();
+        return { externalId: extractGowaMessageId(json) };
+      }
+    } catch {
+      // prossegue para fallback de texto
+    }
+
+    const linhasOpcoes = list.sections.flatMap((s) =>
+      s.rows.map((r) => `${r.title}${r.description ? ` (${r.description})` : ""}`),
+    );
+    const fallbackText = `${list.title ? `*${list.title}*\n\n` : ""}${list.description}\n\n${linhasOpcoes.join("\n")}${list.footer ? `\n\n_${list.footer}_` : ""}`;
+    return this.sendText(deviceId, phone, fallbackText);
+  }
+
+  /**
    * Envia mídia (imagem, áudio ou arquivo) via multipart/form-data.
    *
    * O endpoint do GOWA espera o campo do arquivo (`image`, `audio` ou `file`)
@@ -491,7 +550,7 @@ export class GowaClient {
         signal: AbortSignal.timeout(30_000),
         headers: {
           // Headers completos para contornar CDNs que bloqueiam user-agents não-browser
-          "User-Agent": "Mozilla/5.0 (compatible; DeskcommCRM/1.0)",
+          "User-Agent": "Mozilla/5.0 (compatible; CRM/1.0)",
           Accept: "video/mp4,video/*;q=0.9,*/*;q=0.8",
         },
       });

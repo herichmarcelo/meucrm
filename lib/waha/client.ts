@@ -367,6 +367,47 @@ export class WahaClient {
   }
 
   /**
+   * Envia mensagem com lista de opções interativa (usado por pesquisas como CSAT).
+   */
+  async sendList(
+    session: string,
+    chatId: string,
+    list: {
+      title?: string;
+      description: string;
+      buttonText: string;
+      footer?: string;
+      sections: Array<{
+        title: string;
+        rows: Array<{
+          rowId: string;
+          title: string;
+          description?: string;
+        }>;
+      }>;
+    },
+  ): Promise<unknown> {
+    const res = await fetch(`${this.baseUrl}/api/sendList`, {
+      method: "POST",
+      headers: {
+        "X-Api-Key": this.apiKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        session,
+        chatId,
+        title: list.title,
+        description: list.description,
+        buttonText: list.buttonText,
+        footer: list.footer,
+        sections: list.sections,
+      }),
+    });
+    if (!res.ok) throw new Error(`waha_${res.status}`);
+    return res.json();
+  }
+
+  /**
    * Confere se o número existe no WhatsApp e devolve o chatId canônico.
    * Obrigatório antes de vcard em BR — o nono dígito do CRM nem sempre bate com o wa_id.
    */

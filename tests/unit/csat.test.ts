@@ -245,7 +245,7 @@ describe("CSAT Unit Tests", () => {
         if (table === "csat_surveys") {
           return {
             select: () => ({
-              eq: (field1: string) => ({
+              eq: (_field1: string) => ({
                 eq: (field2: string) => {
                   if (field2 === "conversation_id") {
                     // Sem pesquisa anterior nesta conversa

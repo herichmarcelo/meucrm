@@ -31,6 +31,7 @@ import type { ListMessagesQuery, SendMessageInput } from "@/lib/schemas";
 import { sendTemplateForSession } from "@/lib/channels/meta/send-template-for-session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isGifPlayback, type Message } from "@/lib/types/messaging";
+import { registrarPrimeiraRespostaOutbound } from "@/lib/sla/sla-tracking";
 
 type SB = SupabaseClient;
 
@@ -528,6 +529,11 @@ export async function sendMessageHandler(
     );
   }
   let message = created as unknown as Message;
+
+  const sentVia = (insertRow.sent_via as "user" | "ai" | "system") ?? "user";
+  if (sentVia === "user" || sentVia === "ai") {
+    void registrarPrimeiraRespostaOutbound(c.id, sentVia, supabase).catch(() => {});
+  }
 
   // O canal vem da SESSÃO (migration 0087), não de um literal. O fallback só
   let sessionEmUso = c.channel_sessions;
