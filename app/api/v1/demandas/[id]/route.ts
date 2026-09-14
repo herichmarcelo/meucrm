@@ -1,30 +1,7 @@
 /**
- * PATCH /api/v1/demandas/[id] — marca o PRÓXIMO PASSO de uma demanda aberta.
+ * PATCH /api/v1/demandas/[id] — marca o PRÓXIMO PASSO ou altera o ESTADO de uma demanda.
  *
- * ## Por que esta rota existe
- *
- * O invariante 4 da doutrina ("nenhuma demanda sem próximo passo") já era
- * VISÍVEL em três lugares: contagem no painel de atrito, lista no Radar, e as
- * demandas do contato no painel do inbox. Em nenhum deles dava para RESOLVER —
- * o atendente enxergava o vazamento e tinha de sair da tela para agir.
- *
- * Isso foi denunciado pelo gate dos mapas de arquitetura
- * (`tests/unit/mapas-de-arquitetura.test.ts`): o node do inbox tinha UMA aresta,
- * só de entrada. Peça que só recebe é ilha pelo invariante 1, e o remédio certo
- * não era afrouxar o gate.
- *
- * ## As duas escritas, e por que a segunda existe
- *
- * `proximo_passo` sozinho seria uma anotação. Com `proximo_passo_em` ele vira
- * compromisso datado, que é o que o Radar e o índice sabem cobrar. O texto é
- * obrigatório; a data é opcional — obrigá-la faria o atendente inventar uma
- * para se livrar do campo, e data inventada é pior que data ausente.
- *
- * ## Piso `agent`, e não `manager`
- *
- * Quem atende é quem sabe o que vem a seguir. Exigir gerente aqui empurraria o
- * registro para depois — e "depois" é exatamente o estado que esta rota existe
- * para eliminar.
+ * Suporta transição de estado com controle automático de pausa de SLA em 'aguardando_cliente'.
  */
 import { randomUUID } from "node:crypto";
 import { type NextRequest } from "next/server";
@@ -34,14 +11,21 @@ import { audit } from "@/lib/audit";
 import { fail, ok } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { atualizarPausaDemanda, registrarResolucaoDemanda } from "@/lib/sla/sla-tracking";
+import { dispararPesquisaCsat } from "@/lib/csat/csat-dispatcher";
 
 export const dynamic = "force-dynamic";
 
-const patchSchema = z.object({
-  proximo_passo: z.string().trim().min(3).max(500),
-  /** ISO 8601 absoluto. Ausente é legítimo: nem todo passo tem hora marcada. */
-  proximo_passo_em: z.string().datetime({ offset: true }).nullish(),
-});
+const patchSchema = z
+  .object({
+    proximo_passo: z.string().trim().min(3).max(500).optional(),
+    /** ISO 8601 absoluto. Ausente é legítimo: nem todo passo tem hora marcada. */
+    proximo_passo_em: z.string().datetime({ offset: true }).nullish(),
+    estado: z.enum(["aberta", "em_atendimento", "aguardando_cliente", "resolvida", "encerrada"]).optional(),
+  })
+  .refine((d) => d.proximo_passo !== undefined || d.estado !== undefined, {
+    message: "Informe ao menos 'proximo_passo' ou 'estado'.",
+  });
 
 export async function PATCH(
   req: NextRequest,
@@ -64,7 +48,7 @@ export async function PATCH(
   if (!parsed.success) {
     return fail(
       "validation_failed",
-      "O próximo passo precisa ter de 3 a 500 caracteres.",
+      "Dados inválidos para a demanda.",
       422,
       { details: parsed.error.flatten().fieldErrors as Record<string, unknown>, requestId },
     );
@@ -72,33 +56,55 @@ export async function PATCH(
 
   const admin = createAdminClient();
 
-  // Service role bypassa RLS: o `organization_id` vem do CONTEXTO autenticado e
-  // é filtro explícito no update, nunca do corpo. E `fechada_em is null` porque
-  // marcar o próximo passo de uma demanda encerrada é reabrir pela porta dos
-  // fundos — sem desfecho, sem registro, sem ninguém saber.
+  // Consulta estado atual para gerenciar pausa de SLA se estado mudar
+  const { data: atual } = await admin
+    .from("demandas")
+    .select("id, estado, fechada_em")
+    .eq("id", id)
+    .eq("organization_id", activeOrg.orgId)
+    .maybeSingle();
+
+  if (!atual || atual.fechada_em) {
+    return fail("not_found", "Demanda não encontrada, ou já encerrada.", 404, { requestId });
+  }
+
+  const updateData: Record<string, unknown> = {
+    updated_at: new Date().toISOString(),
+  };
+
+  if (parsed.data.proximo_passo !== undefined) {
+    updateData.proximo_passo = parsed.data.proximo_passo;
+    updateData.proximo_passo_em = parsed.data.proximo_passo_em ?? null;
+  }
+
+  if (parsed.data.estado !== undefined) {
+    updateData.estado = parsed.data.estado;
+    if (parsed.data.estado === "resolvida" || parsed.data.estado === "encerrada") {
+      updateData.fechada_em = new Date().toISOString();
+    }
+    await atualizarPausaDemanda(id, parsed.data.estado, atual.estado, admin);
+  }
+
   const { data, error } = await admin
     .from("demandas")
-    .update({
-      proximo_passo: parsed.data.proximo_passo,
-      proximo_passo_em: parsed.data.proximo_passo_em ?? null,
-      updated_at: new Date().toISOString(),
-    })
+    .update(updateData)
     .eq("id", id)
     .eq("organization_id", activeOrg.orgId)
     .is("fechada_em", null)
-    .select("id, proximo_passo, proximo_passo_em")
+    .select("id, estado, proximo_passo, proximo_passo_em, sla_paused_at, sla_total_paused_seconds")
     .maybeSingle();
 
   if (error) return fail("internal_error", error.message, 500, { requestId });
-  // Zero linhas é indistinguível de sucesso no PostgREST — o bug conhecido de
-  // `organizations` engana exatamente assim. Aqui o `select` de volta é o que
-  // separa "gravou" de "não achou/já fechada".
   if (!data) {
     return fail("not_found", "Demanda não encontrada, ou já encerrada.", 404, { requestId });
   }
 
+  if (parsed.data.estado === "resolvida" || parsed.data.estado === "encerrada") {
+    await registrarResolucaoDemanda(id, admin);
+  }
+
   void audit({
-    action: "demanda.proximo_passo_definido",
+    action: parsed.data.estado ? "demanda.estado_alterado" : "demanda.proximo_passo_definido",
     actorUserId: user.id,
     organizationId: activeOrg.orgId,
     resourceType: "demanda",
@@ -107,8 +113,29 @@ export async function PATCH(
     metadata: {
       proximo_passo: parsed.data.proximo_passo,
       proximo_passo_em: parsed.data.proximo_passo_em ?? null,
+      estado: parsed.data.estado,
     },
   });
+
+  if (parsed.data.estado === "resolvida" || parsed.data.estado === "encerrada") {
+    void admin
+      .from("demanda_conversas")
+      .select("conversation_id")
+      .eq("demanda_id", id)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle()
+      .then(({ data: dc }) => {
+        if (dc?.conversation_id) {
+          void dispararPesquisaCsat({
+            organizationId: activeOrg.orgId,
+            conversationId: dc.conversation_id,
+            demandaId: id,
+            actorUserId: user.id,
+          });
+        }
+      });
+  }
 
   return ok(data, { requestId });
 }

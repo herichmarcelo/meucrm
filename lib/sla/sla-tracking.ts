@@ -198,12 +198,87 @@ export async function registrarPrimeiraRespostaOutbound(
       }
     }
 
+    const updatePayload: Record<string, unknown> = {
+      primeira_resposta_em: now.toISOString(),
+      sla_first_response_breached: breached,
+    };
+    if (breached) {
+      updatePayload.sla_breached_at = now.toISOString();
+    }
+
     await client
       .from("demandas")
-      .update({
-        primeira_resposta_em: now.toISOString(),
-        sla_first_response_breached: breached,
-      })
+      .update(updatePayload)
       .eq("id", d.id);
   }
 }
+
+/**
+ * Registra a resolução da demanda, calculando se o SLA de resolução foi estourado.
+ */
+export async function registrarResolucaoDemanda(
+  demandaId: string,
+  client: SupabaseClient,
+): Promise<void> {
+  const { data: d } = await client
+    .from("demandas")
+    .select("id, organization_id, aberta_em, sla_resolution_target_minutes, sla_total_paused_seconds, sla_paused_at")
+    .eq("id", demandaId)
+    .maybeSingle();
+
+  if (!d) return;
+
+  const now = new Date();
+  const targetMinutes = d.sla_resolution_target_minutes as number | null;
+  let resolutionBreached = false;
+
+  if (targetMinutes && targetMinutes > 0) {
+    const [slotsRes, holidaysRes] = await Promise.all([
+      client
+        .from("business_hours_slots")
+        .select("day_of_week, open_time, close_time, is_active, timezone")
+        .eq("organization_id", d.organization_id),
+      client
+        .from("business_holidays")
+        .select("holiday_date, description")
+        .eq("organization_id", d.organization_id),
+    ]);
+
+    const slots = (slotsRes.data as BusinessHourSlot[]) ?? [];
+    const holidays = (holidaysRes.data as BusinessHoliday[]) ?? [];
+    let tz = slots[0]?.timezone;
+    if (!tz) {
+      try {
+        const orgQuery = client.from("organizations").select("timezone").eq("id", d.organization_id);
+        const orgRes = typeof orgQuery?.maybeSingle === "function" ? await orgQuery.maybeSingle() : await orgQuery;
+        const orgItem = Array.isArray(orgRes?.data) ? orgRes.data[0] : orgRes?.data;
+        tz = (orgItem as { timezone?: string } | null)?.timezone ?? "America/Sao_Paulo";
+      } catch {
+        tz = "America/Sao_Paulo";
+      }
+    }
+
+    const abertaEm = new Date(String(d.aberta_em));
+    const minutosDecorridos = calcularMinutosUteis(abertaEm, now, slots, holidays, tz);
+    const minutosPausados = Math.floor(Number(d.sla_total_paused_seconds || 0) / 60);
+    const minutosEfetivos = Math.max(0, minutosDecorridos - minutosPausados);
+
+    if (minutosEfetivos > targetMinutes) {
+      resolutionBreached = true;
+    }
+  }
+
+  const updatePayload: Record<string, unknown> = {
+    sla_resolution_breached: resolutionBreached,
+  };
+
+  if (resolutionBreached) {
+    updatePayload.sla_breached_at = now.toISOString();
+  }
+
+  await client
+    .from("demandas")
+    .update(updatePayload)
+    .eq("id", demandaId);
+}
+
