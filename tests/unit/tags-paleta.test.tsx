@@ -16,8 +16,12 @@ describe("lib/tags/paleta - Paleta de cores de tags", () => {
     expect(obterEstiloTag("   ")).toEqual(TAG_COR_NEUTRA);
   });
 
-  it("retorna estilo neutro para cor desconhecida sem quebrar a UI", () => {
+  it("retorna estilo neutro para cor desconhecida sem nome de tag (sem fallback por hash)", () => {
+    // Sem tagNome, obterEstiloTag não consegue calcular hash — retorna neutro.
     expect(obterEstiloTag("cor_inexistente_xyz")).toEqual(TAG_COR_NEUTRA);
+    // Com tagNome, usa hash mesmo que a cor explícita seja desconhecida.
+    const comNome = obterEstiloTag("cor_inexistente_xyz", "urgente");
+    expect(comNome.id).not.toBe("neutro");
   });
 
   it("mapeia corretamente as cores em português e seus aliases em inglês", () => {
@@ -73,11 +77,21 @@ describe("components/tags/TagChip - Renderização visual", () => {
     expect(chip?.className).toContain("bg-red-50");
   });
 
-  it("renderiza tag sem cor recaindo no estilo neutro sem quebrar", () => {
+  it("renderiza tag sem cor no banco usando cor por hash determinístico (não neutro)", () => {
+    // "dúvida" não tem cor no banco (color=null), mas o TagChip usa o nome
+    // para calcular uma cor vibrante via DJB2 hash — nunca mais cinza neutro.
     render(<TagChip tag="dúvida" color={null} />);
     const chip = screen.getByText("dúvida").closest("div");
     expect(chip).toBeInTheDocument();
-    expect(chip?.className).toContain("bg-secondary");
+    // A cor hash para "dúvida" é determinística — verificar que NÃO é neutro
+    // e que tem alguma cor vibrante de fundo.
+    expect(chip?.className).not.toContain("bg-secondary");
+    // Deve conter uma das classes de fundo colorido da paleta
+    const temCorVibrante = [
+      "bg-red-50", "bg-orange-50", "bg-amber-50", "bg-emerald-50",
+      "bg-blue-50", "bg-purple-50", "bg-pink-50", "bg-cyan-50",
+    ].some((cls) => chip?.className.includes(cls));
+    expect(temCorVibrante).toBe(true);
   });
 
   it("dispara callback onRemove ao clicar no botão de remoção", () => {

@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { apiClient } from "@/lib/api/client";
 import { showApiError } from "@/components/feedback/ApiErrorToast";
+import { obterCorPadraoTag } from "@/lib/tags/paleta";
 
 export interface TagDefinition {
   id: string;
@@ -52,8 +53,18 @@ export function useOrganizationTags(orgId?: string | null) {
     return map;
   }, [query.data]);
 
-  function getTagColor(name: string): string | null {
-    return tagColorMap[name.trim().toLowerCase()] ?? null;
+  /**
+   * Retorna a cor canônica de uma tag.
+   * - Se a tag tem entrada no banco com cor explícita → retorna essa cor.
+   * - Se a tag não tem entrada ou a cor é null → retorna cor determinística
+   *   baseada no nome (hash DJB2 sobre a paleta vibrante), garantindo que
+   *   toda tag tenha sempre uma cor visível e consistente.
+   */
+  function getTagColor(name: string): string {
+    const trimmed = name.trim().toLowerCase();
+    const fromDb = tagColorMap[trimmed];
+    // fromDb pode ser null (linha existe mas sem cor) ou undefined (linha inexistente)
+    return fromDb ?? obterCorPadraoTag(trimmed);
   }
 
   return {

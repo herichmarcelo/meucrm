@@ -27,7 +27,7 @@ export function TagChip({
   className,
   size = "sm",
 }: TagChipProps) {
-  const estilo = obterEstiloTag(color);
+  const estilo = obterEstiloTag(color, tag);
 
   return (
     <Badge

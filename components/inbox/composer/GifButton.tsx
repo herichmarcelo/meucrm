@@ -5,13 +5,15 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { GifPicker } from "./GifPicker";
 import type { GiphyGifItem } from "@/app/api/v1/gifs/route";
+import { cn } from "@/lib/utils";
 
 interface Props {
   disabled?: boolean;
   onPick: (gif: GiphyGifItem) => void;
+  className?: string;
 }
 
-export function GifButton({ disabled, onPick }: Props) {
+export function GifButton({ disabled, onPick, className }: Props) {
   const [open, setOpen] = useState(false);
 
   const handlePick = (gif: GiphyGifItem) => {
@@ -26,7 +28,7 @@ export function GifButton({ disabled, onPick }: Props) {
           type="button"
           size="icon"
           variant="ghost"
-          className="h-9 w-9 shrink-0 font-black text-xs tracking-tighter"
+          className={cn("h-9 w-9 shrink-0 font-black text-xs tracking-tighter", className)}
           aria-label="GIFs"
           title="Enviar GIF (GIPHY)"
           disabled={disabled}

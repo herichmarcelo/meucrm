@@ -16,6 +16,9 @@ export const dynamic = "force-dynamic";
 const upsertTagSchema = z.object({
   name: z.string().trim().toLowerCase().min(1).max(40),
   color: z.string().trim().toLowerCase().max(30).nullable().optional(),
+  // Colunas da migration 0177 — aceitas no schema Zod mas só enviadas ao banco
+  // se a migration já foi aplicada. Sem a migration elas retornam 42703 e
+  // quebram TODO o sistema de cores. Mantemos aqui para não mudar a API pública.
   group_slug: z.string().trim().toLowerCase().max(50).nullable().optional(),
   is_exclusive: z.boolean().optional(),
   is_csat_enabled: z.boolean().optional(),
@@ -23,8 +26,11 @@ const upsertTagSchema = z.object({
   sla_resolution_minutes: z.number().int().positive().nullable().optional(),
 });
 
-const TAG_SELECT_COLS =
-  "id, organization_id, name, color, group_slug, is_exclusive, is_csat_enabled, sla_first_response_minutes, sla_resolution_minutes, created_at, updated_at";
+// ATENÇÃO: só colunas que existem na migration baseline atual.
+// As colunas group_slug, is_exclusive, is_csat_enabled, sla_*
+// fazem parte da migration 0177 que ainda não foi aplicada no Supabase.
+// Quando a migration for aplicada, adicionar as colunas aqui.
+const TAG_SELECT_COLS = "id, organization_id, name, color, created_at, updated_at";
 
 export async function GET(_req: NextRequest): Promise<Response> {
   const requestId = randomUUID();
@@ -63,15 +69,9 @@ export async function POST(req: NextRequest): Promise<Response> {
     });
   }
 
-  const {
-    name,
-    color,
-    group_slug,
-    is_exclusive,
-    is_csat_enabled,
-    sla_first_response_minutes,
-    sla_resolution_minutes,
-  } = parsed.data;
+  const { name, color } = parsed.data;
+  // group_slug, is_exclusive, is_csat_enabled, sla_* são ignorados até a
+  // migration 0177 ser aplicada no Supabase (colunas não existem ainda).
 
   const admin = createAdminClient();
   const now = new Date().toISOString();
@@ -82,14 +82,6 @@ export async function POST(req: NextRequest): Promise<Response> {
     color: color ?? null,
     updated_at: now,
   };
-
-  if (group_slug !== undefined) upsertData.group_slug = group_slug;
-  if (is_exclusive !== undefined) upsertData.is_exclusive = is_exclusive;
-  if (is_csat_enabled !== undefined) upsertData.is_csat_enabled = is_csat_enabled;
-  if (sla_first_response_minutes !== undefined)
-    upsertData.sla_first_response_minutes = sla_first_response_minutes;
-  if (sla_resolution_minutes !== undefined)
-    upsertData.sla_resolution_minutes = sla_resolution_minutes;
 
   const { data, error } = await admin
     .from("tags")
@@ -110,9 +102,6 @@ export async function POST(req: NextRequest): Promise<Response> {
     metadata: {
       name,
       color: color ?? null,
-      group_slug: data.group_slug,
-      is_exclusive: data.is_exclusive,
-      is_csat_enabled: data.is_csat_enabled,
     },
   });
 

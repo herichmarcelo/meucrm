@@ -41,12 +41,27 @@ export function EmojiButton({ disabled, onPick }: Props) {
   );
 }
 
-function EmojiPickerLazy({ onPick }: { onPick: (emoji: string) => void }) {
+export function EmojiPickerLazy({
+  onPick,
+  theme,
+  perLine,
+  maxFrequentRows = 1,
+}: {
+  onPick: (emoji: string) => void;
+  theme?: "light" | "dark" | "auto";
+  perLine?: number;
+  maxFrequentRows?: number;
+}) {
   return (
     <Picker
       data={async () => (await import("@emoji-mart/data")).default}
       locale="pt"
       previewPosition="none"
+      skinTonePosition="search"
+      navPosition="top"
+      maxFrequentRows={maxFrequentRows}
+      perLine={perLine}
+      theme={theme || "auto"}
       onEmojiSelect={(e: { native: string }) => onPick(e.native)}
     />
   );

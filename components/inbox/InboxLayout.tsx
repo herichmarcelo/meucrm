@@ -285,7 +285,17 @@ export function InboxLayout({ initialSelectedId = null }: InboxLayoutProps = {})
   // piso do composer (370px), em vez dos 2px que a versão de uma faixa só
   // deixava. Margem de 2px não é margem, é sorte.
   return (
-    <div className="grid h-[calc(100dvh-3.5rem-2*var(--space-6))] w-full grid-cols-1 md:grid-cols-[300px_1fr] xl:grid-cols-[272px_1fr_296px] 2xl:grid-cols-[300px_1fr_320px]">
+    // OVERRIDE DO PADDING DO APPSHELL — só no Inbox.
+    //
+    // O AppShell tem `p-6` (24px todos os lados) no `<main>`. Para a maioria das
+    // telas esse espaço é bem-vindo. No Inbox não: no celular o padding come
+    // 48px horizontais numa viewport já estreita, espremendo a lista de
+    // conversas e o composer. Este wrapper cancela o padding somente aqui, sem
+    // tocar no shell global que serve todas as outras páginas.
+    //
+    // O `-mx-6 -my-6` anula o `p-6` do pai; no `md+` ele volta a zero porque o
+    // grid de 3 colunas já tem espaço de sobra e o padding é visualmente correto.
+    <div className="-mx-6 -my-6 grid h-[calc(100dvh-3.5rem)] w-[calc(100%+3rem)] grid-cols-1 md:mx-0 md:my-0 md:h-[calc(100dvh-3.5rem-2*var(--space-6))] md:w-full md:grid-cols-[300px_1fr] xl:grid-cols-[272px_1fr_296px] 2xl:grid-cols-[300px_1fr_320px]">
       {/*
         NO CELULAR, UMA COISA POR VEZ.
 
@@ -343,7 +353,7 @@ export function InboxLayout({ initialSelectedId = null }: InboxLayoutProps = {})
           conversa, e só aparece quando há uma.
         */}
         {selectedId && (
-          <div className="flex items-center gap-1 border-b border-border px-1 py-1 md:hidden">
+          <div className="flex items-center gap-1 border-b border-border bg-muted/30 px-1 py-1 md:hidden">
             <Button
               variant="ghost"
               size="sm"

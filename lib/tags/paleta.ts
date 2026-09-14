@@ -117,12 +117,65 @@ const MAPA_CORES = new Map<string, TagColorDef>(
 );
 
 /**
- * Obtém a definição de estilo de uma cor de tag.
- * Se a cor for nula, indefinida ou desconhecida, retorna o estilo neutro (fallback seguro).
+ * Cores vibrantes disponíveis para atribuição automática por hash.
+ * Exclui "cinza" para que o fallback automático nunca produza cor neutra.
  */
-export function obterEstiloTag(cor: string | null | undefined): TagColorDef {
-  if (!cor) return TAG_COR_NEUTRA;
-  const normalizada = cor.trim().toLowerCase();
-  const canonicalId = ALIASES[normalizada] ?? normalizada;
-  return MAPA_CORES.get(canonicalId) ?? TAG_COR_NEUTRA;
+const CORES_PARA_HASH: readonly string[] = [
+  "vermelho",
+  "laranja",
+  "amarelo",
+  "verde",
+  "azul",
+  "roxo",
+  "rosa",
+  "ciano",
+] as const;
+
+/**
+ * Retorna uma cor determinística e consistente baseada no nome da tag.
+ * Mesmo nome → mesma cor em qualquer device, sessão ou momento.
+ * Nunca retorna cinza/neutro: toda tag tem uma cor vibrante de identidade.
+ */
+export function obterCorPadraoTag(nome: string): string {
+  const normalizado = nome.trim().toLowerCase();
+  // DJB2 hash — simples, sem imports, determinístico, sem colisões visíveis
+  let hash = 5381;
+  for (let i = 0; i < normalizado.length; i++) {
+    hash = ((hash << 5) + hash) ^ normalizado.charCodeAt(i);
+    hash = hash >>> 0; // força unsigned 32-bit
+  }
+  return CORES_PARA_HASH[hash % CORES_PARA_HASH.length] ?? "azul";
+}
+
+/**
+ * Obtém a definição de estilo de uma cor de tag.
+ *
+ * @param cor  - Cor canônica da definição no banco (ex: "vermelho", "azul").
+ *               Pode ser null/undefined quando a tag não tem entrada no banco.
+ * @param tagNome - Nome da tag, usado como fallback para gerar cor automática
+ *                  quando `cor` está ausente. Garante que tags sem cor no banco
+ *                  (ex: criadas por digitação sem abrir o seletor) recebam uma
+ *                  cor vibrante e consistente em vez do cinza neutro.
+ */
+export function obterEstiloTag(
+  cor: string | null | undefined,
+  tagNome?: string,
+): TagColorDef {
+  // 1. Cor explícita da definição no banco — tem prioridade absoluta.
+  if (cor) {
+    const normalizada = cor.trim().toLowerCase();
+    const canonicalId = ALIASES[normalizada] ?? normalizada;
+    const definicao = MAPA_CORES.get(canonicalId);
+    if (definicao) return definicao;
+  }
+
+  // 2. Fallback determinístico pelo nome — tag conhecida pelo usuário mas sem
+  //    entrada ainda no banco. Garante cor vibrante e consistente.
+  if (tagNome) {
+    const corFallback = obterCorPadraoTag(tagNome);
+    return MAPA_CORES.get(corFallback) ?? TAG_COR_NEUTRA;
+  }
+
+  // 3. Neutro total — sem cor nem nome.
+  return TAG_COR_NEUTRA;
 }

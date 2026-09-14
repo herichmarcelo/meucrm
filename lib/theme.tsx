@@ -95,6 +95,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
 
+export function useOptionalTheme(): ThemeContextValue | null {
+  return React.useContext(ThemeContext);
+}
+
 export function useTheme(): ThemeContextValue {
   const ctx = React.useContext(ThemeContext);
   if (!ctx) {

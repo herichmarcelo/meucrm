@@ -5,13 +5,31 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { JanelaSelo } from "@/components/inbox/JanelaSelo";
-import { Phone, EnvelopeSimple, InstagramLogo, ArrowRight } from "@/lib/ui/icons";
+import {
+  Phone,
+  EnvelopeSimple,
+  InstagramLogo,
+  ArrowRight,
+  DotsThreeVertical,
+  Clock,
+} from "@/lib/ui/icons";
 import { useAuth } from "@/hooks/auth/AuthProvider";
 import { useClaimConversation } from "@/hooks/inbox/useClaimConversation";
 import { useReleaseConversation } from "@/hooks/inbox/useReleaseConversation";
 import { useCloseConversation } from "@/hooks/inbox/useCloseConversation";
 import { useResumeAiAttendance } from "@/hooks/inbox/useResumeAiAttendance";
+import { useSnoozeConversation } from "@/hooks/inbox/useSnoozeConversation";
 import { ReassignDialog } from "@/components/inbox/ReassignDialog";
 import { SnoozeButton } from "@/components/inbox/SnoozeButton";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -47,6 +65,16 @@ const STATUS_LABEL: Record<string, string> = {
   archived: "Arquivada",
 };
 
+const SNOOZE_DURATIONS: Array<{ hours: 1 | 3 | 24; label: string }> = [
+  { hours: 1, label: "Em 1 hora" },
+  { hours: 3, label: "Em 3 horas" },
+  { hours: 24, label: "Em 24 horas" },
+];
+
+function isSnoozeActive(snoozeUntil: string | null | undefined): boolean {
+  return snoozeUntil != null && new Date(snoozeUntil).getTime() > Date.now();
+}
+
 export function ConversationHeader({ conversation }: Props) {
   const t = useT();
   const { user } = useAuth();
@@ -54,6 +82,7 @@ export function ConversationHeader({ conversation }: Props) {
   const release = useReleaseConversation();
   const close = useCloseConversation();
   const retomar = useResumeAiAttendance();
+  const { snooze, cancel: cancelSnooze } = useSnoozeConversation();
   const [reassignOpen, setReassignOpen] = useState(false);
   const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
 
@@ -63,6 +92,8 @@ export function ConversationHeader({ conversation }: Props) {
   const status = conversation.status;
   const isMineAssigned = conversation.assigned_to_user_id === user.id;
   const isOpen = status === "open" || conversation.assigned_to_user_id == null;
+  const isActive = status !== "closed" && status !== "archived";
+  const snoozeIsActive = isSnoozeActive(conversation.snooze_until);
 
   /**
    * A conversa saiu do atendimento automático? As DUAS travas contam: o silêncio
@@ -75,21 +106,17 @@ export function ConversationHeader({ conversation }: Props) {
     conversation.bot_silenced_until !== null && conversation.bot_silenced_until !== undefined;
   const emAtendimentoHumano =
     (silenciada || c?.force_human === true) && status !== "closed" && status !== "archived";
+  const LABEL_RETOMAR = "Devolver ao automático" as const;
 
   return (
-    // `flex-wrap` porque este header travava a LARGURA DA TELA INTEIRA. Ele
-    // media 707px de `min-content` — a identidade do contato encolhia bem
-    // (`min-w-0` + `truncate`), mas a barra de ações era `shrink-0` e não
-    // quebrava. Como a coluna do meio do inbox é `1fr`, que é
-    // `minmax(auto, 1fr)`, ela não podia ficar menor que esses 707px, e o
-    // painel de CRM era empurrado 311px para fora da viewport em 1280px.
+    // LAYOUT ADAPTATIVO — celular vs desktop.
     //
-    // Reorganizar em vez de esconder: acima de ~1440px o header fica IDÊNTICO ao
-    // de antes (uma linha), e quando aperta a barra desce para a linha de baixo.
-    // Nenhuma ação some — um menu "mais" esconderia o "Lembrar" que a spec
-    // `canais-baseline` clica, e, pior, esconderia ação de quem atende.
-    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-background px-4 py-3">
-      <div className="flex min-w-0 items-center gap-3">
+    // Linha 1 do contato: Nome truncado à esquerda + botão ⋮ no canto direito (mobile).
+    // Linha 2 do contato: Badges ("Em atendimento", "Automático pausado", JanelaSelo) abaixo do nome.
+    // Linha 3 do contato: Telefone / e-mail.
+    // Desktop (md+): botões em linha visível e o ⋮ some.
+    <div className="flex flex-wrap items-start justify-between gap-2 border-b border-border bg-background px-4 py-2.5 md:items-center md:gap-3">
+      <div className="flex min-w-0 items-start gap-3 md:items-center">
         {c?.id && (
           <Avatar className="h-10 w-10 shrink-0">
             <AvatarImage
@@ -103,27 +130,39 @@ export function ConversationHeader({ conversation }: Props) {
           </Avatar>
         )}
         <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <h2 className="truncate text-sm font-semibold">{displayName}</h2>
-            <Badge variant="outline" className="h-4 px-1.5 text-[10px]">
-              {t(STATUS_LABEL[status] ?? status)}
-            </Badge>
-            {/* Ao lado do estado, não escondido num painel: a pergunta "dá para
-                escrever agora?" se faz ANTES de digitar, não depois de receber um
-                `failed` com um código de cinco dígitos. */}
-            <JanelaSelo
-              provider={conversation.channel_sessions?.provider ?? null}
-              lastInboundAt={conversation.last_inbound_at}
-            />
-            {/* Sem esta marca, a conversa em que o robô está calado tem exatamente
-                a mesma cara de uma conversa normal — e ninguém entende por que as
-                respostas automáticas pararam. */}
-            {emAtendimentoHumano && (
-              <Badge variant="outline" className="h-4 px-1.5 text-[10px]" data-testid="badge-atendimento-humano">
-                Automático pausado
+          {/* Nome e Badges: empilhados no mobile (< md), em linha única no desktop (md+) */}
+          <div className="flex flex-col md:flex-row md:items-center md:gap-2">
+            <h2 className="truncate text-sm font-semibold">
+              {displayName}
+            </h2>
+
+            {/* Badges: no mobile abaixo do nome, no desktop ao lado */}
+            <div className="mt-0.5 flex flex-wrap items-center gap-1.5 md:mt-0">
+              <Badge variant="outline" className="h-4 shrink-0 px-1.5 text-[10px]">
+                {t(STATUS_LABEL[status] ?? status)}
               </Badge>
-            )}
+              {/* Ao lado do estado, não escondido num painel: a pergunta "dá para
+                  escrever agora?" se faz ANTES de digitar, não depois de receber um
+                  `failed` com um código de cinco dígitos. */}
+              <JanelaSelo
+                provider={conversation.channel_sessions?.provider ?? null}
+                lastInboundAt={conversation.last_inbound_at}
+              />
+              {/* Sem esta marca, a conversa em que o robô está calado tem exatamente
+                  a mesma cara de uma conversa normal — e ninguém entende por que as
+                  respostas automáticas pararam. */}
+              {emAtendimentoHumano && (
+                <Badge
+                  variant="outline"
+                  className="h-4 shrink-0 px-1.5 text-[10px]"
+                  data-testid="badge-atendimento-humano"
+                >
+                  Automático pausado
+                </Badge>
+              )}
+            </div>
           </div>
+
           {phone && (
             <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
               <Phone size={11} weight="regular" aria-hidden /> {phone}
@@ -142,10 +181,112 @@ export function ConversationHeader({ conversation }: Props) {
         </div>
       </div>
 
-      {/* `shrink-0` saiu daqui: era ele que impunha o piso de largura. Agora a
-          barra pode encolher e quebrar internamente, e os botões continuam
-          todos visíveis e clicáveis — só que em duas linhas quando preciso. */}
-      <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+      {/*
+        BARRA DE AÇÕES — header.children[1] exigido por invariantes de teste.
+        `flex-wrap min-w-0` preserva os limites de responsividade testados em
+        `tests/unit/inbox-header-nao-trava.test.tsx`.
+      */}
+      <div className="flex min-w-0 flex-wrap items-center justify-end gap-1.5">
+        {/* ── MOBILE (< md): botão ⋮ único alinhado no canto direito ── */}
+        <div className="md:hidden">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                size="icon"
+                variant="outline"
+                className="h-8 w-8 shrink-0"
+                aria-label="Ações da conversa"
+              >
+                <DotsThreeVertical size={16} weight="bold" aria-hidden />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-52">
+              {isOpen && (
+                <DropdownMenuItem
+                  disabled={claim.isPending}
+                  onClick={() =>
+                    claim.mutate({
+                      conversation_id: conversation.id,
+                      expected_assignee: conversation.assigned_to_user_id,
+                    })
+                  }
+                >
+                  {t("Assumir")}
+                </DropdownMenuItem>
+              )}
+              {isMineAssigned && (
+                <DropdownMenuItem
+                  disabled={release.isPending}
+                  onClick={() => release.mutate({ conversation_id: conversation.id })}
+                >
+                  {t("Liberar")}
+                </DropdownMenuItem>
+              )}
+              {emAtendimentoHumano && (
+                <DropdownMenuItem
+                  disabled={retomar.isPending}
+                  onClick={() => retomar.mutate({ conversation_id: conversation.id })}
+                >
+                  {retomar.isPending ? "Devolvendo..." : t(LABEL_RETOMAR)}
+                </DropdownMenuItem>
+              )}
+              {isActive && (
+                <DropdownMenuItem onClick={() => setReassignOpen(true)}>
+                  {t("Transferir")}
+                </DropdownMenuItem>
+              )}
+              {/* Lembrar: sub-menu com durações, ou cancelar se lembrete ativo */}
+              {isActive && (
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger>
+                    <Clock size={14} className="mr-2" aria-hidden />
+                    {snoozeIsActive ? "Lembrete ativo" : t("Lembrar")}
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent>
+                    {snoozeIsActive ? (
+                      <DropdownMenuItem
+                        onClick={() =>
+                          cancelSnooze.mutate({ conversation_id: conversation.id })
+                        }
+                      >
+                        Cancelar lembrete
+                      </DropdownMenuItem>
+                    ) : (
+                      SNOOZE_DURATIONS.map((d) => (
+                        <DropdownMenuItem
+                          key={d.hours}
+                          onClick={() =>
+                            snooze.mutate({
+                              conversation_id: conversation.id,
+                              duration_hours: d.hours,
+                            })
+                          }
+                        >
+                          {d.label}
+                        </DropdownMenuItem>
+                      ))
+                    )}
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+              )}
+              {isActive && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    disabled={close.isPending}
+                    className="text-destructive focus:text-destructive"
+                    onClick={() => setCloseConfirmOpen(true)}
+                  >
+                    {t("Fechar")}
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+
+        {/* ── DESKTOP (md+): botões em linha ── */}
+        <div className="hidden flex-wrap items-center gap-1.5 md:flex">
         {isOpen && (
           <Button
             size="sm"
@@ -184,18 +325,18 @@ export function ConversationHeader({ conversation }: Props) {
             {retomar.isPending ? "Devolvendo..." : t("Devolver ao automático")}
           </Button>
         )}
-        {status !== "closed" && status !== "archived" && (
+        {isActive && (
           <Button size="sm" variant="outline" onClick={() => setReassignOpen(true)}>
             {t("Transferir")}
           </Button>
         )}
-        {status !== "closed" && status !== "archived" && (
+        {isActive && (
           <SnoozeButton
             conversationId={conversation.id}
             snoozeUntil={conversation.snooze_until ?? null}
           />
         )}
-        {status !== "closed" && status !== "archived" && (
+        {isActive && (
           <Button
             size="sm"
             variant="outline"
@@ -205,25 +346,23 @@ export function ConversationHeader({ conversation }: Props) {
             {t("Fechar")}
           </Button>
         )}
-        {/* `xl:hidden` porque a partir de 1280px o painel lateral de CRM entra
-            na tela — e ele já tem um "Ver contato", para o MESMO contato, a um
-            palmo de distância. Duas portas idênticas na mesma tela não são
-            redundância inofensiva: são a linha a mais que empurrava a barra de
-            ações para uma segunda fileira justo na largura mais apertada.
-            Medido: sem a duplicata, os botões voltam a caber em UMA linha em
-            1280px.
+        {/*
+          Item 3: "Ver contato" visível SOMENTE no desktop (md a xl), nunca no
+          mobile. No mobile o botão "Ficha" no header superior já cobre essa
+          função — mostrar os dois é duplicidade que confunde.
 
-            Abaixo de 1280 o painel não existe, e aí esta é a única porta para o
-            contato — por isso a condição é a mesma do painel, e não um valor
-            escolhido à parte. Não é esconder ação; é não repeti-la. */}
+          `hidden md:inline-flex xl:hidden` = visível apenas entre md e xl.
+          Acima de xl o painel lateral de CRM já tem o link para o contato.
+        */}
         {c?.id && (
-          <Button asChild size="sm" variant="ghost" className="xl:hidden">
+          <Button asChild size="sm" variant="ghost" className="hidden md:inline-flex xl:hidden">
             <Link href={`/app/contacts/${c.id}`} className="flex items-center gap-1">
               Ver contato
               <ArrowRight size={12} weight="regular" aria-hidden />
             </Link>
           </Button>
         )}
+        </div>
       </div>
       <ReassignDialog
         conversationId={conversation.id}

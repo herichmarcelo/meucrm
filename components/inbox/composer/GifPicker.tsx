@@ -21,9 +21,10 @@ const QUICK_TAGS = [
 
 interface Props {
   onPick: (gif: GiphyGifItem) => void;
+  className?: string;
 }
 
-export function GifPicker({ onPick }: Props) {
+export function GifPicker({ onPick, className }: Props) {
   const [query, setQuery] = useState("");
   const [selectedTag, setSelectedTag] = useState<string>("Em Alta");
   const [gifs, setGifs] = useState<GiphyGifItem[]>([]);
@@ -57,11 +58,17 @@ export function GifPicker({ onPick }: Props) {
   };
 
   useEffect(() => {
+    if (!query) {
+      startTransition(() => {
+        fetchGifs("");
+      });
+      return;
+    }
     const timer = setTimeout(() => {
       startTransition(() => {
         fetchGifs(query);
       });
-    }, 250);
+    }, 300);
 
     return () => clearTimeout(timer);
   }, [query]);
@@ -72,9 +79,14 @@ export function GifPicker({ onPick }: Props) {
   };
 
   return (
-    <div className="flex h-[420px] w-[340px] flex-col rounded-lg border bg-popover text-popover-foreground shadow-2xl overflow-hidden">
+    <div
+      className={cn(
+        "flex h-[420px] w-[340px] flex-col rounded-lg border bg-popover text-popover-foreground shadow-2xl overflow-hidden",
+        className
+      )}
+    >
       {/* Header com busca */}
-      <div className="p-2.5 border-b space-y-2 bg-muted/40">
+      <div className="p-2.5 border-b space-y-2 bg-muted/40 shrink-0">
         <div className="relative flex items-center">
           <MagnifyingGlass
             size={16}
@@ -127,7 +139,7 @@ export function GifPicker({ onPick }: Props) {
       </div>
 
       {/* Grid de GIFs */}
-      <div className="flex-1 overflow-y-auto p-2 scrollbar-thin scrollbar-thumb-muted-foreground/20">
+      <div className="flex-1 min-h-0 overflow-y-auto p-2 scrollbar-thin scrollbar-thumb-muted-foreground/20">
         {loading ? (
           <div className="grid grid-cols-2 gap-2">
             {Array.from({ length: 6 }).map((_, i) => (
@@ -165,6 +177,7 @@ export function GifPicker({ onPick }: Props) {
                 title={gif.title}
                 className="group relative h-28 w-full overflow-hidden rounded-md bg-muted/60 focus-visible:outline-2 focus-visible:outline-ring hover:opacity-90 transition-transform active:scale-95"
               >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={gif.preview_url}
                   alt={gif.title}
@@ -179,7 +192,7 @@ export function GifPicker({ onPick }: Props) {
       </div>
 
       {/* Footer "Powered by GIPHY" */}
-      <div className="flex items-center justify-center gap-1.5 py-1.5 px-3 border-t bg-muted/30 text-[10px] text-muted-foreground font-semibold tracking-wider uppercase">
+      <div className="flex items-center justify-center gap-1.5 py-1.5 px-3 border-t bg-muted/30 text-[10px] text-muted-foreground font-semibold tracking-wider uppercase shrink-0">
         <span>Powered by</span>
         <span className="font-black tracking-widest text-primary">GIPHY</span>
       </div>
