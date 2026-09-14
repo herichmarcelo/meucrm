@@ -37,6 +37,9 @@ export const PUBLIC_PATHS: RegExp[] = [
   // dois nomes de propósito: `/^\/legal/` deixaria qualquer sub-path futuro
   // nascer público de carona.
   /^\/legal\/(terms|privacy)$/,
+  // Pesquisa CSAT pública (link de e-mail e voto seguro)
+  /^\/csat(\/.*)?$/,
+  /^\/api\/v1\/csat\/vote$/,
 ];
 
 export function isPublicPath(pathname: string): boolean {
