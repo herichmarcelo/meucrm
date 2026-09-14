@@ -410,6 +410,14 @@ export const NAV_DESTINATIONS: NavDestination[] = [
     sidebar: true,
   },
   {
+    href: "/app/metrics/sla",
+    label: "SLA e CSAT",
+    description: "Conformidade de metas de atendimento e índice de satisfação CSAT.",
+    icon: ClockCountdown,
+    group: "analise",
+    sidebar: true,
+  },
+  {
     // Observabilidade, não configuração: por isso não fica junto dos agentes.
     href: "/app/ai/evolution",
     label: "Evolução da IA",
@@ -470,6 +478,15 @@ export const NAV_DESTINATIONS: NavDestination[] = [
     label: "Distribuição de atendimento",
     description: "Quem recebe cada cliente novo, e o que cada atendente enxerga.",
     icon: UsersThree,
+    group: "organizacao",
+    section: "Sua empresa",
+    minRole: "manager",
+  },
+  {
+    href: "/app/settings/sla",
+    label: "SLA e CSAT",
+    description: "Metas de atendimento por tipo, horário comercial e pesquisa CSAT.",
+    icon: ClockCountdown,
     group: "organizacao",
     section: "Sua empresa",
     minRole: "manager",

@@ -123,5 +123,9 @@ export {
   InstagramLogo,
   // inbox no celular: voltar para a lista e abrir a ficha do contato
   IdentificationCard,
+  Heart,
+  FloppyDisk,
+  CalendarBlank,
+  Star,
 } from "@phosphor-icons/react/dist/ssr";
 

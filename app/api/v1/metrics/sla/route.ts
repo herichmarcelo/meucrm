@@ -41,7 +41,7 @@ function calcularPeriodo(parsed: z.infer<typeof querySchema>): { from: string; t
 export async function GET(req: NextRequest): Promise<Response> {
   const requestId = randomUUID();
 
-  const authz = await requireRole("manager", { requestId, resource: "metrics_sla" });
+  const authz = await requireRole("viewer", { requestId, resource: "metrics_sla" });
   if (!authz.ok) return authz.response;
   const { org: activeOrg } = authz;
 
@@ -83,6 +83,8 @@ export async function GET(req: NextRequest): Promise<Response> {
     .select(`
       id,
       estado,
+      assunto,
+      aberta_em,
       criada_em,
       fechada_em,
       primeira_resposta_em,
@@ -115,6 +117,19 @@ export async function GET(req: NextRequest): Promise<Response> {
     pausado: 0,
   };
 
+  const demandasEmRisco: Array<{
+    id: string;
+    assunto: string;
+    tipo: string;
+    bucket: SlaRiskBucket;
+    minutos_uteis_decorridos: number;
+    minutos_uteis_restantes: number | null;
+    porcentagem_consumida: number | null;
+    primeira_resposta_pendente: boolean;
+    conversation_id: string | null;
+    aberta_em: string;
+  }> = [];
+
   const porTipoMap = new Map<
     string,
     {
@@ -130,6 +145,7 @@ export async function GET(req: NextRequest): Promise<Response> {
   >();
 
   for (const dem of listaDemandas) {
+    const dataAbertura = (dem as unknown as { aberta_em?: string }).aberta_em ?? dem.criada_em;
     const tipo = await resolverTipoAtendimentoDemanda(dem.id, admin);
     const tipoNome = tipo?.tag_name ?? "Não classificado";
 
@@ -156,7 +172,7 @@ export async function GET(req: NextRequest): Promise<Response> {
     // 3.1 Primeira Resposta
     if (dem.primeira_resposta_em) {
       const minutos = calcularMinutosUteis(
-        new Date(dem.criada_em),
+        new Date(dataAbertura),
         new Date(dem.primeira_resposta_em),
         slots,
         holidays,
@@ -181,7 +197,7 @@ export async function GET(req: NextRequest): Promise<Response> {
     if (isEncerrada && dem.fechada_em) {
       const pausaMinutos = Math.floor((dem.sla_total_paused_seconds ?? 0) / 60);
       const minutosBrutos = calcularMinutosUteis(
-        new Date(dem.criada_em),
+        new Date(dataAbertura),
         new Date(dem.fechada_em),
         slots,
         holidays,
@@ -209,7 +225,7 @@ export async function GET(req: NextRequest): Promise<Response> {
         : tipo?.resolution_minutes ?? null;
 
       const risk = classifySlaRisk({
-        abertaEm: new Date(dem.criada_em),
+        abertaEm: new Date(dataAbertura),
         now: new Date(),
         prazoMinutos,
         isPaused: dem.estado === "aguardando_cliente" || Boolean(dem.sla_paused_at),
@@ -220,8 +236,31 @@ export async function GET(req: NextRequest): Promise<Response> {
         timeZone: timezone,
       });
       radarBuckets[risk.bucket]++;
+
+      if (risk.bucket !== "em_dia") {
+        demandasEmRisco.push({
+          id: dem.id,
+          assunto: (dem as unknown as { assunto?: string }).assunto || "Sem assunto",
+          tipo: tipoNome,
+          bucket: risk.bucket,
+          minutos_uteis_decorridos: risk.minutosUteisDecorridos,
+          minutos_uteis_restantes: risk.minutosUteisRestantes,
+          porcentagem_consumida: risk.porcentagemConsumida,
+          primeira_resposta_pendente: !dem.primeira_resposta_em,
+          conversation_id: tipo?.first_conversation_id ?? null,
+          aberta_em: dataAbertura,
+        });
+      }
     }
   }
+
+  // Ordena demandas em risco por severidade: violado primeiro, depois em_risco (maior % consumida), depois pausado
+  demandasEmRisco.sort((a, b) => {
+    const ordem: Record<SlaRiskBucket, number> = { violado: 1, em_risco: 2, pausado: 3, em_dia: 4 };
+    const diffOrdem = ordem[a.bucket] - ordem[b.bucket];
+    if (diffOrdem !== 0) return diffOrdem;
+    return (b.porcentagem_consumida ?? 0) - (a.porcentagem_consumida ?? 0);
+  });
 
   const mediaResp = contagemPrimeiraResposta > 0 ? Math.round(somaMinutosPrimeiraResposta / contagemPrimeiraResposta) : null;
   const taxaResp = contagemPrimeiraResposta > 0 ? Math.round((cumpridoPrimeiraResposta / contagemPrimeiraResposta) * 100) : null;
@@ -253,6 +292,7 @@ export async function GET(req: NextRequest): Promise<Response> {
         taxa_cumprimento_pct: taxaRes,
       },
       radar_risco: radarBuckets,
+      demandas_em_risco: demandasEmRisco,
       por_tipo: porTipo,
     },
     { requestId },
