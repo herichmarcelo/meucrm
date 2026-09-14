@@ -20,12 +20,14 @@ const authRef: { user: Pick<AuthUser, "is_platform_admin">; activeOrg: ActiveOrg
   activeOrg: null,
 };
 
+const pathnameRef = { current: "/app/inbox" };
+
 vi.mock("@/hooks/auth/AuthProvider", () => ({
   useAuth: () => authRef,
   usePermission: () => false,
 }));
 vi.mock("next/navigation", () => ({
-  usePathname: () => "/app/inbox",
+  usePathname: () => pathnameRef.current,
 }));
 vi.mock("@/components/connections/ConnectionHealthDot", () => ({
   ConnectionHealthDot: () => null,
@@ -44,7 +46,10 @@ function comoPapel(role: ActiveOrg["role"]) {
   authRef.activeOrg = { orgId: "org-1", name: "Org", role };
 }
 
-afterEach(cleanup);
+afterEach(() => {
+  pathnameRef.current = "/app/inbox";
+  cleanup();
+});
 
 describe("Sidebar agrupado", () => {
   it("renderiza os títulos de grupo na ordem de uso", () => {
@@ -123,5 +128,17 @@ describe("Sidebar agrupado", () => {
     expect(screen.getByRole("link", { name: /Inbox/ })).toHaveAttribute("aria-current", "page");
     // "Kanban" saiu da interface; o item da mesma URL agora se chama "Funis".
     expect(screen.getByRole("link", { name: "Funis" })).not.toHaveAttribute("aria-current");
+  });
+
+  it("desempata rotas aninhadas por especificidade (ex: /app/metrics/sla não ativa /app/metrics)", () => {
+    comoPapel("admin");
+    pathnameRef.current = "/app/metrics/sla";
+    render(<Sidebar collapsed={false} />);
+
+    const slaLink = screen.getByRole("link", { name: "SLA e CSAT" });
+    const desempenhoLink = screen.getByRole("link", { name: "Desempenho" });
+
+    expect(slaLink).toHaveAttribute("aria-current", "page");
+    expect(desempenhoLink).not.toHaveAttribute("aria-current");
   });
 });

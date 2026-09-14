@@ -43,6 +43,19 @@ export function SidebarContent({
   const grupos = todos.filter((g) => g.group.id !== GRUPO_NO_RODAPE);
   const rodape = NAV_GROUPS.find((g) => g.id === GRUPO_NO_RODAPE)?.hub;
 
+  // Resolve o item ativo na barra lateral por especificidade (maior comprimento de href).
+  // Evita que prefixos curtos (ex: /app/metrics) fiquem ativos quando uma sub-rota
+  // de mesmo prefixo também é um item de menu irmão (ex: /app/metrics/sla).
+  const todosItensNav = grupos.flatMap((g) => g.items);
+  const activeItemHref = todosItensNav
+    .filter((item) => pathname === item.href || pathname.startsWith(item.href + "/"))
+    .sort((a, b) => b.href.length - a.href.length)[0]?.href;
+
+  const isRodapeActive =
+    !activeItemHref &&
+    !!rodape &&
+    (pathname === rodape.href || pathname.startsWith(rodape.href + "/"));
+
   const brand = useMarcaDaInstalacao();
   /**
    * O CONSUMIDOR do nome por organização.
@@ -123,7 +136,7 @@ export function SidebarContent({
               )}
               <ul aria-labelledby={collapsed ? undefined : tituloId} aria-label={collapsed ? t(group.label) : undefined} className="space-y-1">
                 {items.map((item) => {
-                  const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
+                  const isActive = item.href === activeItemHref;
                   const Icon = item.icon;
                   return (
                     <li key={item.href}>
@@ -181,11 +194,11 @@ export function SidebarContent({
           <Link
             href={rodape.href}
             title={collapsed ? t(rodape.label) : undefined}
-            aria-current={pathname.startsWith(rodape.href) ? "page" : undefined}
+            aria-current={isRodapeActive ? "page" : undefined}
             onClick={onNavigate}
             className={cn(
               "mb-1 flex items-center gap-3 rounded-md px-3 py-1.5 text-sm transition-colors",
-              pathname.startsWith(rodape.href)
+              isRodapeActive
                 ? "bg-accent text-accent-foreground"
                 : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
               collapsed && "justify-center px-2",
