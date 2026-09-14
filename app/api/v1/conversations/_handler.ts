@@ -14,6 +14,9 @@ import type {
   PatchConversationInput,
 } from "@/lib/schemas";
 import type { Conversation } from "@/lib/types/messaging";
+import { resolverTagsExclusivas } from "@/lib/tags/exclusive-group";
+import { dispararPesquisaCsat } from "@/lib/csat/csat-dispatcher";
+import { logger } from "@/lib/logger";
 
 /**
  * Prepara o termo digitado para viajar dentro de um `or=` do PostgREST.
@@ -265,7 +268,7 @@ export async function patchConversationHandler(
     }
   }
   if (input.tags !== undefined) {
-    update.tags = input.tags;
+    update.tags = await resolverTagsExclusivas(input.tags, ctx.organization_id, supabase);
   }
 
   const { data, error } = await supabase
@@ -302,6 +305,18 @@ export async function patchConversationHandler(
       requestId: ctx.requestId,
       metadata: { ...a.metadataActor, status: input.status },
     });
+
+    if (input.status === "closed") {
+      void dispararPesquisaCsat({
+        organizationId: conv.organization_id,
+        conversationId: conv.id,
+        actorUserId: a.actorUserId,
+      }).catch((err) => {
+        logger.warn("[conversations] disparo csat falhou", {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
+    }
   }
   if (input.tags !== undefined) {
     await audit({

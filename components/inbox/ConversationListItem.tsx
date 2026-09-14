@@ -10,6 +10,8 @@ import { channelKindOf } from "@/lib/channels/types";
 import type { ConversationWithContact } from "@/hooks/inbox/useConversationsRealtime";
 import { rotuloDoContato } from "@/lib/contacts/rotulo-do-contato";
 import { useTempo } from "@/lib/tempo/TempoProvider";
+import { TagChip } from "@/components/tags/TagChip";
+import { useOrganizationTags } from "@/hooks/inbox/useTags";
 
 interface Props {
   conversation: ConversationWithContact;
@@ -75,7 +77,13 @@ export function ConversationListItem({
   const c = conversation.contacts ?? null;
   const displayName = rotuloDoContato(c);
   const phoneFallback = c?.phone_number ?? "??";
-  const tags = c?.tags ?? [];
+  const { getTagColor } = useOrganizationTags(conversation.organization_id);
+
+  // Tags da conversa têm precedência sobre tags do contato na listagem de atendimento.
+  // [Iteração futura: hierarquia de prioridade entre múltiplas tags na mesma conversa (ex: 'urgente' prevalece).]
+  const tags = Array.from(
+    new Set([...(conversation.tags ?? []), ...(c?.tags ?? [])]),
+  );
   const visibleTags = tags.slice(0, 2);
   const overflow = tags.length - visibleTags.length;
   const preview = conversation.last_message_preview?.trim() || "Sem mensagens";
@@ -102,6 +110,10 @@ export function ConversationListItem({
       )}
       aria-current={isSelected ? "true" : undefined}
     >
+      {/*
+        [Iteração futura: barra/borda lateral colorida (accent border) na linha da lista de conversas,
+        refletindo a cor da tag de maior prioridade para triagem rápida na fila com muitas conversas.]
+      */}
       <div className="relative shrink-0">
         <Avatar className="h-10 w-10">
           {/* Só monta a <img> quando existe arquivo: sem isso o browser pediria
@@ -163,9 +175,7 @@ export function ConversationListItem({
 
         <div className="mt-1.5 flex flex-wrap items-center gap-1">
           {visibleTags.map((t) => (
-            <Badge key={t} variant="secondary" className="h-4 px-1.5 text-[10px]">
-              {t}
-            </Badge>
+            <TagChip key={t} tag={t} color={getTagColor(t)} size="sm" />
           ))}
           {overflow > 0 && (
             <span className="text-[10px] text-muted-foreground">+{overflow}</span>

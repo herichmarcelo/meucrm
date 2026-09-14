@@ -21,6 +21,8 @@ import { NewLeadDialog } from "@/components/kanban/NewLeadDialog";
 import { AppointmentFormDialog, type AppointmentRow } from "@/components/agenda/AppointmentFormDialog";
 import { cn } from "@/lib/utils";
 import { rotuloDoContato } from "@/lib/contacts/rotulo-do-contato";
+import { TagChip } from "@/components/tags/TagChip";
+import { useOrganizationTags } from "@/hooks/inbox/useTags";
 
 interface Props {
   conversation: ConversationWithContact | null;
@@ -224,6 +226,7 @@ function SemLista({
 export function CRMSidePanel({ conversation }: Props) {
   const contact = conversation?.contacts ?? null;
   const contactId = contact?.id ?? null;
+  const { getTagColor } = useOrganizationTags(conversation?.organization_id);
 
   const [leads, setLeads] = useState<LeadRow[] | null>(null);
   const [orders, setOrders] = useState<OrderRow[] | null>(null);
@@ -359,9 +362,7 @@ export function CRMSidePanel({ conversation }: Props) {
           {tags.length > 0 && (
             <div className="flex flex-wrap gap-1">
               {tags.map((t) => (
-                <Badge key={t} variant="secondary" className="h-4 px-1.5 text-[10px]">
-                  {t}
-                </Badge>
+                <TagChip key={t} tag={t} color={getTagColor(t)} size="sm" />
               ))}
             </div>
           )}
