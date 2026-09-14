@@ -2,33 +2,48 @@
 import { useT } from "@/hooks/i18n/useT";
 import {
   forwardRef,
+  Suspense,
   useImperativeHandle,
   useRef,
   useState,
   type ClipboardEvent,
   type KeyboardEvent,
 } from "react";
-import { PaperPlaneTilt } from "@/lib/ui/icons";
+import {
+  CircleNotch,
+  PaperPlaneTilt,
+  Smiley,
+  Sparkle,
+  X,
+} from "@/lib/ui/icons";
+import { useOptionalTheme } from "@/lib/theme";
 import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Skeleton } from "@/components/ui/skeleton";
 import { AttachMenu } from "@/components/inbox/composer/AttachMenu";
 import { AttachmentPreviewDialog } from "@/components/inbox/composer/AttachmentPreviewDialog";
 import { ContactPickerDialog } from "@/components/inbox/composer/ContactPickerDialog";
+import { CatalogPickerDialog } from "@/components/inbox/composer/CatalogPickerDialog";
+import type { CatalogSearchItem } from "@/app/api/v1/catalog/search/route";
 import { ScheduleMessageDialog } from "@/components/inbox/composer/ScheduleMessageDialog";
 import { AudioRecorder } from "@/components/inbox/composer/AudioRecorder";
 import { DraftReplyButton } from "@/components/inbox/composer/DraftReplyButton";
-import { EmojiButton } from "@/components/inbox/composer/EmojiButton";
+import { EmojiButton, EmojiPickerLazy } from "@/components/inbox/composer/EmojiButton";
 import { GifButton } from "@/components/inbox/composer/GifButton";
+import { GifPicker } from "@/components/inbox/composer/GifPicker";
 import { resolveSlash, TemplateMenu } from "@/components/inbox/composer/TemplateMenu";
 import { useCreateNote } from "@/hooks/inbox/useCreateNote";
 import { useMessageTemplates, type MessageTemplate } from "@/hooks/inbox/useMessageTemplates";
-import { X } from "lucide-react";
 import { toast } from "sonner";
 import { useSendMessage } from "@/hooks/inbox/useSendMessage";
 import { useUploadMedia } from "@/hooks/inbox/useUploadMedia";
+import { useDraftReply } from "@/hooks/inbox/useDraftReply";
 import { imagemDoClipboard } from "@/lib/inbox/clipboard-image";
 import { interpolateTemplate } from "@/lib/inbox/template-vars";
 import { channelKindOf } from "@/lib/channels/types";
 import { cn } from "@/lib/utils";
+import type { GiphyGifItem } from "@/app/api/v1/gifs/route";
 
 export interface ComposerHandle {
   focus: () => void;
@@ -88,12 +103,25 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   const [subject, setSubject] = useState("");
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [contactPickerOpen, setContactPickerOpen] = useState(false);
+  const [catalogPickerOpen, setCatalogPickerOpen] = useState(false);
   const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
   const [menuDismissed, setMenuDismissed] = useState(false);
   const [mode, setMode] = useState<"reply" | "note">("reply");
   const taRef = useRef<HTMLTextAreaElement | null>(null);
+  const themeCtx = useOptionalTheme();
+  const emojiTheme =
+    themeCtx?.resolvedTheme ??
+    (typeof document !== "undefined" &&
+    (document.documentElement.classList.contains("dark") ||
+      document.documentElement.getAttribute("data-theme") === "dark")
+      ? "dark"
+      : "light");
+  const [mobilePanelOpen, setMobilePanelOpen] = useState(false);
+  const [mobilePanelTab, setMobilePanelTab] = useState<"emoji" | "gif" | "ai">("emoji");
+  const [aiDraftText, setAiDraftText] = useState("");
   const send = useSendMessage();
   const upload = useUploadMedia();
+  const draftReply = useDraftReply();
   const createNote = useCreateNote();
   const templates = useMessageTemplates();
   const slash = resolveSlash(text);
@@ -186,6 +214,98 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
       taRef.current?.focus();
       autoresize();
     });
+  }
+
+  function handleEmojiInsert(emoji: string) {
+    const ta = taRef.current;
+    if (!ta) {
+      setText((t) => t + emoji);
+      return;
+    }
+    const start = ta.selectionStart ?? text.length;
+    const end = ta.selectionEnd ?? text.length;
+    const next = text.slice(0, start) + emoji + text.slice(end);
+    setText(next);
+    requestAnimationFrame(() => {
+      ta.focus();
+      ta.selectionStart = ta.selectionEnd = start + emoji.length;
+      autoresize();
+    });
+  }
+
+  function handleSendGif(gif: GiphyGifItem) {
+    send.mutate(
+      {
+        conversation_id: conversationId,
+        type: gif.is_mp4 ? "video" : "image",
+        media_url: gif.url,
+        media_mime: gif.is_mp4 ? "video/mp4" : "image/gif",
+        ...(gif.is_mp4 ? { metadata: { gif_playback: true } } : {}),
+        reply_to_message_id: respondendo?.id,
+      },
+      {
+        onSuccess: () => {
+          if (respondendo?.id) onCancelarResposta?.();
+        },
+        onError: (err) => {
+          toast.error(
+            "Erro ao enviar GIF: " +
+              (err instanceof Error ? err.message : "tente novamente"),
+          );
+        },
+      },
+    );
+  }
+
+  function handlePickProduct(product: CatalogSearchItem) {
+    const texto = `*${product.nome}*\n${product.preco_formatado}`;
+    if (product.imagem_url) {
+      const ext = product.imagem_url.split("?")[0]?.toLowerCase().split(".").pop();
+      const mime = ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg";
+      send.mutate(
+        {
+          conversation_id: conversationId,
+          type: "image",
+          media_url: product.imagem_url,
+          media_mime: mime,
+          body: texto,
+          reply_to_message_id: respondendo?.id,
+        },
+        {
+          onSuccess: () => {
+            setCatalogPickerOpen(false);
+            if (respondendo?.id) onCancelarResposta?.();
+          },
+          onError: (err) => {
+            toast.error(
+              "Erro ao enviar produto: " +
+                (err instanceof Error ? err.message : "tente novamente"),
+            );
+          },
+        },
+      );
+    } else {
+      send.mutate(
+        {
+          conversation_id: conversationId,
+          type: "text",
+          body: texto,
+          reply_to_message_id: respondendo?.id,
+        },
+        {
+          onSuccess: () => {
+            setCatalogPickerOpen(false);
+            if (respondendo?.id) onCancelarResposta?.();
+          },
+          onError: (err) => {
+            toast.error(
+              "Erro ao enviar produto: " +
+                (err instanceof Error ? err.message : "tente novamente"),
+            );
+          },
+        },
+      );
+    }
   }
 
   /**
@@ -316,68 +436,226 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
           </div>
         )}
         <div className="flex items-end gap-2">
+          {/*
+            TOOLBAR DE RICH INPUT — dois layouts por breakpoint.
+
+            MOBILE (< md):
+            • "+" (AttachMenu): sempre visível no rodapé — fotos, docs, contato, agendamento.
+            • "☺" (Smiley): abre Popover expansível ancorado com abas: Emoji, GIF, IA.
+            • Direita: microfone (AudioRecorder) quando vazio; botão Enviar quando há texto.
+
+            DESKTOP (md+):
+            • Todos os botões visíveis em linha: +, IA, GIF, Emoji, textarea, Enviar/Áudio.
+          */}
+
+          {/* ── BOTÃO "+" (AttachMenu): Fotos e vídeos / Documento / Contato / Agendar ── */}
+          {/* Sempre visível (tanto no mobile quanto no desktop) — preserva todas as funções */}
           {mode === "reply" && (
             <AttachMenu
               disabled={respostaBarrada}
               onPick={setPendingFile}
               onPickContact={() => setContactPickerOpen(true)}
+              onPickCatalog={() => setCatalogPickerOpen(true)}
               onScheduleMessage={currentContactId ? () => setScheduleDialogOpen(true) : undefined}
             />
           )}
+
+          {/* ── DESKTOP (md+): botões de IA e GIF em linha ── */}
           {mode === "reply" && (
-            <DraftReplyButton conversationId={conversationId} disabled={isDisabled} onDraft={applyDraft} />
+            <div className="hidden md:flex items-center gap-0.5 shrink-0">
+              <DraftReplyButton conversationId={conversationId} disabled={isDisabled} onDraft={applyDraft} />
+              <GifButton
+                disabled={respostaBarrada}
+                onPick={handleSendGif}
+              />
+            </div>
           )}
-          <EmojiButton
-            disabled={isDisabled}
-            onPick={(emoji) => {
-              const ta = taRef.current;
-              if (!ta) {
-                setText((t) => t + emoji);
-                return;
-              }
-              const start = ta.selectionStart ?? text.length;
-              const end = ta.selectionEnd ?? text.length;
-              const next = text.slice(0, start) + emoji + text.slice(end);
-              setText(next);
-              requestAnimationFrame(() => {
-                ta.focus();
-                ta.selectionStart = ta.selectionEnd = start + emoji.length;
-                autoresize();
-              });
-            }}
-          />
-          {mode === "reply" && (
-            <GifButton
-              disabled={respostaBarrada}
-              onPick={(gif) => {
-                send.mutate(
-                  {
-                    conversation_id: conversationId,
-                    // GIF do Giphy é enviado como vídeo MP4 com gif_playback=true.
-                    // O WhatsApp exibe videoMessage com gifPlayback como GIF animado em loop nativo.
-                    // /send/sticker extrai só o primeiro frame (estático) — não usar para GIF.
-                    type: gif.is_mp4 ? "video" : "image",
-                    media_url: gif.url,
-                    media_mime: gif.is_mp4 ? "video/mp4" : "image/gif",
-                    // gif_playback propaga até o envelope para o adapter GOWA rotear corretamente
-                    ...(gif.is_mp4 ? { metadata: { gif_playback: true } } : {}),
-                    reply_to_message_id: respondendo?.id,
-                  },
-                  {
-                    onSuccess: () => {
-                      if (respondendo?.id) onCancelarResposta?.();
-                    },
-                    onError: (err) => {
-                      toast.error(
-                        "Erro ao enviar GIF: " +
-                          (err instanceof Error ? err.message : "tente novamente"),
-                      );
-                    },
-                  },
-                );
-              }}
+
+          {/* ── DESKTOP (md+): Emoji inline ── */}
+          <div className="hidden md:flex shrink-0">
+            <EmojiButton
+              disabled={isDisabled}
+              onPick={handleEmojiInsert}
             />
+          </div>
+
+          {/* ── MOBILE (< md): Botão de Emoji com Painel de 2 Camadas (Emoji / GIF / IA) ── */}
+          {mode === "reply" && (
+            <div className="flex md:hidden shrink-0">
+              <Popover open={mobilePanelOpen} onOpenChange={setMobilePanelOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    className={cn(
+                      "h-9 w-9 shrink-0 text-muted-foreground hover:text-foreground",
+                      mobilePanelOpen && "bg-muted text-foreground",
+                    )}
+                    aria-label="Abrir emojis, gifs e IA"
+                    disabled={respostaBarrada}
+                  >
+                    <Smiley size={20} weight="regular" aria-hidden />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent
+                  side="top"
+                  align="start"
+                  sideOffset={2}
+                  className="w-[calc(100vw-1rem)] sm:w-[380px] h-[420px] sm:h-[460px] max-h-[calc(100dvh-170px)] p-0 flex flex-col bg-popover text-popover-foreground rounded-xl shadow-2xl border border-border overflow-hidden z-50"
+                >
+                  <Tabs
+                    value={mobilePanelTab}
+                    onValueChange={(v) => setMobilePanelTab(v as "emoji" | "gif" | "ai")}
+                    className="flex flex-col h-full w-full"
+                  >
+                    <div className="flex items-center justify-between border-b border-border bg-muted/40 px-2.5 py-1.5 shrink-0">
+                      <TabsList className="grid grid-cols-3 h-8 w-full max-w-[260px] p-0.5 bg-muted">
+                        <TabsTrigger value="emoji" className="text-xs flex items-center gap-1.5 py-1">
+                          <Smiley size={14} weight="regular" />
+                          <span>Emoji</span>
+                        </TabsTrigger>
+                        <TabsTrigger value="gif" className="text-xs flex items-center gap-1.5 py-1">
+                          <span className="text-[9px] font-bold border border-current px-1 rounded leading-none">GIF</span>
+                          <span>GIF</span>
+                        </TabsTrigger>
+                        <TabsTrigger value="ai" className="text-xs flex items-center gap-1.5 py-1">
+                          <Sparkle size={14} weight="duotone" className="text-primary" />
+                          <span>IA</span>
+                        </TabsTrigger>
+                      </TabsList>
+                      <button
+                        type="button"
+                        onClick={() => setMobilePanelOpen(false)}
+                        className="p-1 text-muted-foreground hover:text-foreground rounded-md transition-colors"
+                        aria-label="Fechar painel"
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+
+                    {/* Aba 1: Emoji */}
+                    <TabsContent
+                      value="emoji"
+                      className="flex-1 min-h-0 overflow-hidden m-0 p-0 data-[state=active]:flex data-[state=inactive]:!hidden flex-col bg-popover [&_em-emoji-picker]:!h-full [&_em-emoji-picker]:!w-full [&_em-emoji-picker]:!max-w-full [&_em-emoji-picker]:!border-0"
+                    >
+                      {mobilePanelOpen && (
+                        <Suspense fallback={<Skeleton className="h-full w-full" />}>
+                          <EmojiPickerLazy onPick={handleEmojiInsert} theme={emojiTheme} />
+                        </Suspense>
+                      )}
+                    </TabsContent>
+
+                    {/* Aba 2: GIF */}
+                    <TabsContent
+                      value="gif"
+                      className="flex-1 min-h-0 overflow-hidden m-0 p-0 data-[state=active]:flex data-[state=inactive]:!hidden flex-col bg-popover"
+                    >
+                      {mobilePanelTab === "gif" && (
+                        <GifPicker
+                          onPick={(gif) => {
+                            setMobilePanelOpen(false);
+                            handleSendGif(gif);
+                          }}
+                          className="h-full w-full border-0 shadow-none rounded-none bg-transparent"
+                        />
+                      )}
+                    </TabsContent>
+
+                    {/* Aba 3: IA ("Ajuda para escrever") */}
+                    <TabsContent
+                      value="ai"
+                      className="flex-1 min-h-0 overflow-y-auto m-0 p-4 data-[state=active]:flex data-[state=inactive]:!hidden flex-col bg-popover"
+                    >
+                      {mobilePanelTab === "ai" && (
+                        draftReply.isPending ? (
+                          <div className="flex flex-1 flex-col items-center justify-center py-8 gap-3 text-muted-foreground">
+                            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+                              <CircleNotch size={28} className="animate-spin" />
+                            </div>
+                            <div className="text-center space-y-1">
+                              <p className="text-xs font-semibold text-foreground">Analisando conversa…</p>
+                              <p className="text-[11px] text-muted-foreground">Gerando sugestão de resposta contextual com IA</p>
+                            </div>
+                          </div>
+                        ) : aiDraftText ? (
+                          <div className="flex flex-1 flex-col gap-3 min-h-0">
+                            <div className="flex items-center justify-between shrink-0">
+                              <div className="flex items-center gap-1.5 text-xs font-semibold text-primary">
+                                <Sparkle size={15} weight="fill" />
+                                <span>Sugestão gerada</span>
+                              </div>
+                              <span className="text-[10px] text-muted-foreground bg-muted px-2 py-0.5 rounded-full font-medium">Pronto para envio</span>
+                            </div>
+                            <div className="flex-1 min-h-[140px] rounded-lg border border-border bg-muted/40 p-3 text-xs text-foreground overflow-y-auto whitespace-pre-wrap leading-relaxed">
+                              {aiDraftText}
+                            </div>
+                            <div className="flex items-center gap-2 mt-auto pt-2 shrink-0">
+                              <Button
+                                type="button"
+                                variant="default"
+                                size="sm"
+                                className="flex-1 text-xs h-9 font-medium gap-1.5"
+                                onClick={() => {
+                                  applyDraft(aiDraftText);
+                                  setMobilePanelOpen(false);
+                                }}
+                              >
+                                <PaperPlaneTilt size={14} weight="fill" />
+                                <span>Inserir na mensagem</span>
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="text-xs h-9"
+                                onClick={() => {
+                                  draftReply.mutate(conversationId, {
+                                    onSuccess: (res) => setAiDraftText(res.data.draft),
+                                  });
+                                }}
+                              >
+                                Gerar outro
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex flex-1 flex-col items-center justify-center text-center py-6 px-4 gap-4">
+                            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+                              <Sparkle size={24} weight="fill" />
+                            </div>
+                            <div className="space-y-1.5 max-w-xs">
+                              <h4 className="text-sm font-semibold text-foreground">Ajuda para escrever com IA</h4>
+                              <p className="text-xs text-muted-foreground leading-relaxed">
+                                Gere um rascunho de resposta contextual e personalizado com base nas mensagens recentes do cliente.
+                              </p>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="default"
+                              size="sm"
+                              className="w-full max-w-xs flex items-center justify-center gap-2 h-9 font-medium shadow-sm"
+                              disabled={isDisabled}
+                              onClick={() => {
+                                draftReply.mutate(conversationId, {
+                                  onSuccess: (res) => setAiDraftText(res.data.draft),
+                                });
+                              }}
+                            >
+                              <Sparkle size={15} weight="fill" />
+                              <span>Gerar rascunho com IA</span>
+                            </Button>
+                          </div>
+                        )
+                      )}
+                    </TabsContent>
+                  </Tabs>
+                </PopoverContent>
+              </Popover>
+            </div>
           )}
+
+          {/* Campo de texto (sempre visível no meio) */}
           <textarea
             ref={taRef}
             value={text}
@@ -418,6 +696,8 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
             disabled={mode === "note" ? isDisabled : respostaBarrada}
             aria-label="Mensagem"
           />
+
+          {/* ── BOTÃO DE AÇÃO DIREITA: Enviar (quando há texto ou nota/email) OU Gravação de Áudio (quando vazio) ── */}
           {text.trim() || mode === "note" || isEmail ? (
             <Button
               type="button"
@@ -481,6 +761,12 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
             { onSuccess: () => setContactPickerOpen(false) },
           );
         }}
+      />
+      <CatalogPickerDialog
+        open={catalogPickerOpen}
+        onOpenChange={setCatalogPickerOpen}
+        sending={send.isPending}
+        onPick={handlePickProduct}
       />
       {currentContactId && (
         <ScheduleMessageDialog

@@ -44,6 +44,12 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
   - Busca difusa por tokens (`lib/catalogo/busca.ts`) com eliminação exata de variantes em especificações numéricas.
   - Integração com tool MCP do agente de IA (`crm_search_products`), controle de estoque e detecção de empates com desempate conversacional.
   - Tela de gerenciamento do catálogo no frontend (`/app/catalogo`), busca em tempo real, toggle rápido de status, modal de cadastro/edição e importador CSV (`POST /api/v1/products/import`).
+- **Envio de Produtos do Catálogo no Composer (Atendente Humano)**:
+  - Adicionado item "Catálogo" ao menu "+" do Composer (`AttachMenu`), permitindo aos atendentes buscar e enviar produtos diretamente na conversa.
+  - Reutilização estrita da mesma função de busca por relevância (`ordenarPorRelevancia` em `lib/catalogo/busca.ts`) usada pela IA, garantindo paridade em tolerância a erros de digitação e desempates.
+  - Endpoint dedicado `GET /api/v1/catalog/search` com paginação, cálculo de disponibilidade em estoque e formatação de moeda.
+  - Modal de busca instantânea (`CatalogPickerDialog`) com busca debounced (300ms), miniatura do produto e sinalização visual de itens sem estoque (mantendo-os selecionáveis).
+  - Envio imediato: produtos com imagem são enviados como mídia com legenda formatada (`*Nome*\nR$ Preço`); produtos sem imagem são enviados como texto formatado, com assinatura do atendente aplicada automaticamente.
 - **Padronização de Diálogos de Confirmação (`ConfirmDialog`)**:
   - Eliminação de `window.confirm()` nativo no sistema.
   - Componente canônico `components/ui/confirm-dialog.tsx` com Radix UI, variantes destrutivas, títulos contextuais e acessibilidade.
@@ -54,6 +60,21 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
   - Tools MCP `crm_list_services`, `crm_list_available_slots`, `crm_book_appointment`, `crm_update_appointment_status`.
   - Sincronização automática com as etapas do funil de vendas (`agendamento-solicitado` / `agendado`).
   - Tela completa de Agenda (`/app/agenda`), rotas REST `/api/v1/appointments` e `/api/v1/service-types` e card rápido no painel CRM.
+
+### Corrigido
+
+- **Composição de Mensagem Mobile & Painel Emoji / GIF / IA (`Composer.tsx`)**:
+  - Correção crítica de sobreposição de abas no Radix UI / Tailwind: adicionada a regra `data-[state=inactive]:hidden` ao componente `TabsContent` e classes `data-[state=active]:flex data-[state=inactive]:!hidden` no painel mobile, impedindo que a classe `.flex` sobrescrevesse o atributo HTML `hidden` e renderizasse abas inativas por cima da grade de emojis.
+  - Eliminação da barra de rolagem duplicada e setas que apareciam pelo transbordamento de altura das abas sobrepostas.
+  - Carregamento imediato de GIFs ao abrir a aba (sem o atraso de debounce de 400ms na busca inicial).
+  - Restauração do botão "+" (`AttachMenu`) no mobile com acesso a upload de fotos/vídeos, documentos, envio de contato e agendamento de mensagem.
+  - Botão direito do composer unificado: exibe o botão de envio quando há texto digitado ou nota interna, e o botão de gravação de áudio com microfone quando o campo está vazio.
+
+- **Cabeçalho de Conversa do Inbox no Desktop (`ConversationHeader.tsx`)**:
+  - Reorganização adaptativa do cabeçalho: no desktop (`md+`), o nome do contato e os badges (*"Em atendimento"*, *JanelaSelo*, *"Automático pausado"*) voltam a ficar perfeitamente alinhados na mesma linha horizontal (`md:flex-row md:items-center md:gap-2`).
+  - Corrige a colisão onde o botão *"Liberar"* e as ações da conversa invadiam a segunda linha ao lado dos badges no desktop devido ao alinhamento vertical centralizado.
+  - Preserva no mobile (`< md`) a quebra com badges abaixo do nome e menu de ações em botão único `⋮` no canto superior direito.
+
 
 ## [1.4.0] — 2026-08-24
 

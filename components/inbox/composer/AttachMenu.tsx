@@ -3,17 +3,18 @@ import { useRef } from "react";
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
-import { Clock, FileText, ImageSquare, Plus, UserCircle } from "@/lib/ui/icons";
+import { Clock, FileText, ImageSquare, Plus, ShoppingBag, UserCircle } from "@/lib/ui/icons";
 
 interface Props {
   disabled?: boolean;
   onPick: (file: File) => void;
   onPickContact?: () => void;
+  onPickCatalog?: () => void;
   onScheduleMessage?: () => void;
 }
 
-/** Menu "+" do composer (padrão WhatsApp): Fotos e vídeos / Documento / Contato / Agendar mensagem. */
-export function AttachMenu({ disabled, onPick, onPickContact, onScheduleMessage }: Props) {
+/** Menu "+" do composer (padrão WhatsApp): Fotos e vídeos / Documento / Contato / Catálogo / Agendar mensagem. */
+export function AttachMenu({ disabled, onPick, onPickContact, onPickCatalog, onScheduleMessage }: Props) {
   const mediaRef = useRef<HTMLInputElement | null>(null);
   const docRef = useRef<HTMLInputElement | null>(null);
 
@@ -63,6 +64,16 @@ export function AttachMenu({ disabled, onPick, onPickContact, onScheduleMessage 
             >
               <UserCircle size={18} weight="duotone" className="text-primary" aria-hidden />
               Contato
+            </button>
+          )}
+          {onPickCatalog && (
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm hover:bg-muted"
+              onClick={onPickCatalog}
+            >
+              <ShoppingBag size={18} weight="duotone" className="text-primary" aria-hidden />
+              Catálogo
             </button>
           )}
           {onScheduleMessage && (

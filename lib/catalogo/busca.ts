@@ -112,3 +112,13 @@ export function ordenarPorRelevancia<T extends ProdutoBuscavel>(
   }
   return achados.sort((a, b) => b.nota - a.nota || a.produto.nome.localeCompare(b.produto.nome));
 }
+
+/**
+ * Formata valor inteiro em centavos para exibição em moeda (default BRL / R$).
+ */
+export function formatarPrecoCents(cents: number, moeda = "BRL"): string {
+  return (cents / 100).toLocaleString("pt-BR", {
+    style: "currency",
+    currency: moeda || "BRL",
+  });
+}

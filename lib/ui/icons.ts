@@ -18,6 +18,7 @@ export {
   Users,
   UsersThree,
   Storefront,
+  ShoppingBag,
   Robot,
   Sparkle,
   ShieldCheck,
@@ -99,6 +100,7 @@ export {
   Flag,
   // misc
   DotsThree,
+  DotsThreeVertical,
   CaretDown,
   CaretUp,
   CaretDoubleLeft,

@@ -107,3 +107,69 @@ A interface foi implementada respeitando o Design System do produto (Sage, Tailw
    - Prévia das primeiras 5 linhas antes de confirmar.
    - Botão para baixar modelo oficial de planilha (`GET /api/v1/products/template`).
    - Relatório pós-importação com total lido, criados, atualizados e linhas rejeitadas com motivo nominal.
+
+---
+
+## 7. Envio pelo Atendente Humano no Composer (`AttachMenu` + `CatalogPickerDialog`)
+
+Para permitir que atendentes humanos enviem ofertas e produtos diretamente na conversa sem digitar detalhes manualmente, o catálogo foi integrado à barra de anexos do Composer:
+
+### 7.1. Regra de Ouro: Reuso Estrito do Motor de Relevância
+A busca executada pelo atendente humano **reaproveita exatamente a mesma função** (`ordenarPorRelevancia` / `pontuar` em `lib/catalogo/busca.ts`) que a ferramenta MCP da IA consome.
+- **Paridade de Comportamento:** Se o atendente digitar *"ifone 15 256"*, o algoritmo elimina modelos de 128GB, tolera a grafia imperfeita de *"ifone"* e preserva empates entre variantes idênticas. Nenhuma consulta simplificada com `ilike` ou motor paralelo é utilizada.
+
+### 7.2. Endpoint de Busca (`GET /api/v1/catalog/search`)
+- **Parâmetros:** `q` (termo de busca) e `limite` (padrão 10, máx 50).
+- **RBAC:** `requireRole("viewer")` — permite que qualquer atendente (`agent` ou superior) busque e consulte itens sem barreiras indevidas de permissão.
+- **Consulta:** Carrega produtos ativos (`ativo = true`) da organização corrente (`org.orgId`).
+- **Classificação:** Se houver termo de busca `q`, processa via `ordenarPorRelevancia`; se vazio, lista os produtos por ordem alfabética de nome.
+- **Payload Retornado:**
+  ```json
+  {
+    "data": [
+      {
+        "id": "uuid",
+        "codigo": "IP15-128",
+        "nome": "Apple iPhone 15 128GB Preto",
+        "descricao": "...",
+        "marca": "Apple",
+        "categoria": "Smartphones",
+        "preco_cents": 499900,
+        "preco_formatado": "R$ 4.999,00",
+        "moeda": "BRL",
+        "controla_estoque": true,
+        "quantidade": 5,
+        "disponivel": true,
+        "imagem_url": "https://...",
+        "relevancia": 0.95
+      }
+    ]
+  }
+  ```
+
+### 7.3. Componente `CatalogPickerDialog` e Fluxo no Composer
+1. **Menu "+" (`AttachMenu`):** Exibe o botão **Catálogo** com ícone Phosphor `ShoppingBag` estilizado em padrão duotone/primary consistente com Fotos, Documento e Contato.
+2. **Modal de Busca:**
+   - Input com busca debounced (300ms) consumindo o hook `useCatalogSearch(debounced)`.
+   - Miniatura da foto do produto (com fallback elegante para ícone quando não há imagem).
+   - Nome, código/SKU, marca e categoria.
+   - Preço em destaque formatado em reais.
+   - Badge visual **"Sem estoque"** quando `disponivel = false`, **mantendo o produto selecionável** para que o atendente possa enviar informações e negociar prazos/reposição com o cliente.
+3. **Envio Imediato no Clique:**
+   - **Produto com foto (`imagem_url` preenchido):** Enviado via `send.mutate({ type: "image", media_url, media_mime, body })` onde `body` é formatado como:
+     ```text
+     *Nome do Produto*
+     R$ 4.999,00
+     ```
+     O backend encaminha a URL direta com o caption para o canal (GOWA / WAHA / Meta).
+   - **Produto sem foto:** Enviado via `send.mutate({ type: "text", body })` com o mesmo texto formatado.
+   - **Assinatura do Atendente:** O backend (`sendMessageHandler`) prefixa a assinatura configurada do usuário (`*Atendente:*\n...`) de forma transparente em qualquer envio com `body`.
+   - **Fechamento:** O modal é fechado instantaneamente no envio bem-sucedido.
+
+---
+
+## 8. Testes e Validações Automatizadas
+
+- **`tests/unit/api-catalog-search.test.ts`**: Valida a rota HTTP garantindo exclusão de variantes incompatíveis por número, tolerância a digitação ("ifone"), formatação correta de centavos para R$, flags de disponibilidade de estoque e autorização RBAC.
+- **`tests/unit/catalog-picker-dialog.test.tsx`**: Valida renderização, pesquisa debounced, badge de estoque sem bloqueio de clique e disparo do callback `onPick`.
+- **`tests/unit/composer-attach.test.tsx`**: Valida presença do item no menu `+` e envios diferenciados (foto com legenda vs. texto puro).
